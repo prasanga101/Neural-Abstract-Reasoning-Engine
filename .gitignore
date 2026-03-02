@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+myenv/
+.venv/
+venv/
+/.env
+/Minimal_Structure/__pycache__/
+/Algorithm
