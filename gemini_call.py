@@ -14,12 +14,17 @@ client = genai.Client(api_key=api_key)
 SYSTEM_PROMPT = """
 You are a planning module for Neural Abstract Reasoning Engine (NARE).
 
-Return ONLY valid JSON.
-Do NOT include markdown.
-Do NOT include explanations.
-Do NOT wrap in ```.
+You MUST return ONLY a single valid JSON object.
+No markdown. No extra text. No code fences.
 
-JSON schema (must match exactly):
+REQUIRED top-level keys (must all exist):
+- task (string)
+- reasoning_steps (list)
+- final_output (string)
+
+If any required key is missing, your output is invalid.
+
+JSON schema:
 
 {
   "task": "string",
@@ -59,11 +64,12 @@ def generate_plan(task:str, retries: int =3)->dict:
             last_error = e
             print(f"Attempt {i} failed: {e}")
 
-            task = (
-                f"{task}\n\n"
-                f"{last_error}\n\n"
-
-            )
+        task = (
+    f"{task}\n\n"
+    f"The previous output was INVALID because: {last_error}.\n"
+    f"You MUST fix the JSON and include all required keys.\n"
+    f"Return full valid JSON only."
+        )
     raise ValueError(f"All {retries} attempts failed. Last error: {last_error}")
 
 
