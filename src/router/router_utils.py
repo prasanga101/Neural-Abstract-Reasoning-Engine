@@ -30,6 +30,12 @@ def get_recommended_tools(task_type):
 
 
 def build_router_response(task_type, confidence, recommended_tools):
+    with open("./router_json", "w") as f:
+        f.write(str({
+            "task_type": task_type,
+            "confidence": round(confidence, 4),
+            "recommended_tools": recommended_tools
+        }))
     return {
         "task_type": task_type,
         "confidence": round(confidence, 4),
