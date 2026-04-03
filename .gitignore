@@ -15,6 +15,7 @@ venv/
 /src/visualizer/__pycache__
 /planner_model/
 /router_model/
+/src/executor/__pycache__
 
 # Models
 planner_model/
