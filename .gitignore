@@ -17,6 +17,7 @@ venv/
 /router_model/
 /src/executor/__pycache__
 /src/verifier/__pycache__
+/src/executor/tools/__pycache__
 
 # Models
 planner_model/
