@@ -1,6 +1,11 @@
 from src.verifier.rule_checker import RuleChecker
 from src.verifier.gemini_verifier import GeminiVerifier
 from src.executor.simulation_env import SimulationEnv
+import json
+from src.slr.node_representation import ReasoningNode
+from src.slr.reasoning_graph import ReasoningGraph
+from src.executor.executor import Executor
+from src.executor.resource_allocator import ResourceAllocator
 
 class Verifier:
     def __init__(self, api_key=None):
@@ -28,11 +33,8 @@ class Verifier:
         }
 
 if __name__ == "__main__":
-    import json
-    from src.slr.node_representation import ReasoningNode
-    from src.slr.reasoning_graph import ReasoningGraph
-    from src.executor.executor import Executor
-    from src.executor.resource_allocator import ResourceAllocator
+
+
 
     print("\n--- FULL PIPELINE TEST ---\n")
 
@@ -61,7 +63,7 @@ if __name__ == "__main__":
 
     graph.validate_graph()
 
-    env = SimulationEnv("There is a major earthquake in Kathmandu, Nepal with critical injuries and many wounded people")
+    env = SimulationEnv("There is a major earthquake in Mumbai, India with critical injuries and many wounded people")
     allocator = ResourceAllocator(env)
 
     executor = Executor(graph, env, allocator)

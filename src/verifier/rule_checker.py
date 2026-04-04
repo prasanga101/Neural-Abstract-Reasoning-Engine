@@ -6,8 +6,7 @@ class RuleChecker:
         errors.extend(self._check_negative_values(state))
         errors.extend(self._check_required_outputs(state, execution_trace))
         errors.extend(self._check_dependency_rules(state, execution_trace))
-        print("STATE:", state)
-        print("TRACE:", execution_trace)
+
 
         return {
             "valid": len(errors) == 0,
