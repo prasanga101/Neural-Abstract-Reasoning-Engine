@@ -75,6 +75,11 @@ if __name__ == "__main__":
         result,
         env
     )
+    print("\n--- EXECUTION RESULT BEFORE VERIFIER ---")
+    print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+
+    print("\n--- ENV STATE BEFORE VERIFIER ---")
+    print(json.dumps(env.get_full_state(), indent=2, ensure_ascii=False, default=str))
 
     print("\n--- VERIFICATION ---")
     print(json.dumps(verification, indent=2, ensure_ascii=False, default=str))
