@@ -1,27 +1,21 @@
 from src.slr.reasoning_graph import ReasoningGraph
 from src.executor.simulation_env import SimulationEnv
 from src.executor.resource_allocator import ResourceAllocator
+from src.executor.tool_registry import ToolRegistry
+import json
 
 class Executor:
-    def __init__(self, reasoning_graph: ReasoningGraph, env: SimulationEnv , allocator: ResourceAllocator):
+    def __init__(self, reasoning_graph: ReasoningGraph, env: SimulationEnv, allocator: ResourceAllocator):
         self.reasoning_graph = reasoning_graph
         self.env = env
         self.allocator = allocator
         self.context = {}
         self.execution_trace = []
+        self.registry = ToolRegistry()
 
     def _execute_node(self, node):
-
-        if node.name == "estimate_number_of_casualties":
-            severity = self.env.get_state("injury_severity")
-            estimated = 350 if severity != "low" else 100
-            self.env.update_state("estimated_casualties", estimated)
-            return {"estimated_casualties": estimated}
-        elif node.name == "dispatch_ambulances":
-            return self.allocator.allocate_ambulances()
-        elif node.name == "allocate_temporary_shelters":
-            return self.allocator.allocate_shelters()
-        return {"result": f"Executed {node.name}"}
+        tool = self.registry.get_tool(node.name)
+        return tool.run(self.context, self.env)
 
     def execute(self):
         order = self.reasoning_graph.get_execution_order()
@@ -64,51 +58,56 @@ class Executor:
             "final_outputs": self.context
         }
 
-
 if __name__ == "__main__":
-
     from src.slr.node_representation import ReasoningNode
-    from src.slr.reasoning_graph import ReasoningGraph
 
     print("\n--- EXECUTOR TEST ---\n")
 
-    # Step 1: Create nodes
-    node1 = ReasoningNode(name="estimate_number_of_casualties")
-    node2 = ReasoningNode(name="dispatch_ambulances")
-    node3 = ReasoningNode(name="allocate_temporary_shelters")
+    node1 = ReasoningNode(name="analyze_event_context")
+    node2 = ReasoningNode(name="retrieve_disaster_information")
+    node3 = ReasoningNode(name="assess_injury_severity")
+    node4 = ReasoningNode(name="collect_sensor_data")
+    node5 = ReasoningNode(name="estimate_number_of_casualties")
+    node6 = ReasoningNode(name="identify_nearest_hospitals")
+    node7 = ReasoningNode(name="identify_alternative_routes")
+    node8 = ReasoningNode(name="optimize_transport_paths")
 
-    # Step 2: Build graph
     graph = ReasoningGraph()
     graph.add_node(node1)
     graph.add_node(node2)
     graph.add_node(node3)
+    graph.add_node(node4)
+    graph.add_node(node5)
+    graph.add_node(node6)
+    graph.add_node(node7)
+    graph.add_node(node8)
 
-    graph.add_edge("estimate_number_of_casualties", "dispatch_ambulances")
-    graph.add_edge("dispatch_ambulances", "allocate_temporary_shelters")
+    graph.add_edge("analyze_event_context", "retrieve_disaster_information")
+    graph.add_edge("analyze_event_context", "assess_injury_severity")
+    graph.add_edge("analyze_event_context", "collect_sensor_data")
+    graph.add_edge("retrieve_disaster_information", "estimate_number_of_casualties")
+    graph.add_edge("assess_injury_severity", "estimate_number_of_casualties")
+    graph.add_edge("analyze_event_context", "identify_nearest_hospitals")
+    graph.add_edge("identify_nearest_hospitals", "identify_alternative_routes")
+    graph.add_edge("collect_sensor_data", "identify_alternative_routes")
+    graph.add_edge("identify_alternative_routes", "optimize_transport_paths")
+
 
     graph.validate_graph()
 
-    # Step 3: Create environment
-    env = SimulationEnv("Tsunami in India with heavy casualties")
-    env.update_state("injury_severity", "critical")
-
-    # Step 4: Create allocator
+    env = SimulationEnv("There is a major earthquake in Kathmandu, Nepal with critical injuries and many wounded people")
     allocator = ResourceAllocator(env)
 
-    # Step 5: Create executor
     executor = Executor(graph, env, allocator)
-
-    # Step 6: Execute
     result = executor.execute()
 
-    # Step 7: Print results
     print("Final Status:", result["status"])
+
     print("\nExecution Trace:")
-    for step in result["execution_trace"]:
-        print(step)
+    print(json.dumps(result["execution_trace"], indent=2, ensure_ascii=False))
 
     print("\nFinal Outputs:")
-    print(result["final_outputs"])
+    print(json.dumps(result["final_outputs"], indent=2, ensure_ascii=False))
 
     print("\nFinal Environment State:")
-    print(env.get_full_state())
+    print(json.dumps(env.get_full_state(), indent=2, ensure_ascii=False))
