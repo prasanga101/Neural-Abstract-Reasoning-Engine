@@ -1,0 +1,37 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+myenv/
+.venv/
+venv/
+/.env
+/Minimal_Structure/__pycache__/
+/Algorithm
+/src/planner/__pycache__
+/src/router/__pycache__
+/src/slr/__pycache__
+/src/visualizer/__pycache__
+/planner_model/
+/router_model/
+/src/executor/__pycache__
+/src/verifier/__pycache__
+/src/executor/tools/__pycache__
+
+# Models
+planner_model/
+router_model/
+
+# ML files
+*.pt
+*.pkl
+*.safetensors
+*.bin
+
+# Data
+data/
+
+# Cache
+__pycache__/
+*.pyc

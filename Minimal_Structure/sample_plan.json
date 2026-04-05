@@ -1,0 +1,24 @@
+{
+  "task": "Explain why the sky appears blue.",
+  "reasoning_steps": [
+    {
+      "step_id": 1,
+      "step_description": "Identify sunlight, atmosphere, and perception as key components.",
+      "required_tools": [],
+      "produced_content": [{"type":"note","value":"Key components identified"}]
+    },
+    {
+      "step_id": 2,
+      "step_description": "Explain Rayleigh scattering and wavelength dependence.",
+      "required_tools": [],
+      "produced_content": [{"type":"principle","value":"Shorter wavelengths scatter more"}]
+    },
+    {
+      "step_id": 3,
+      "step_description": "Conclude why blue dominates human perception.",
+      "required_tools": [],
+      "produced_content": [{"type":"summary","value":"Blue appears strongest to us"}]
+    }
+  ],
+  "final_output": "The sky looks blue mainly due to Rayleigh scattering of shorter wavelengths in the atmosphere."
+}
