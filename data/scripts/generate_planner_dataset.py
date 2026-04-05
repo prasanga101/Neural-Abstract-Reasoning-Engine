@@ -61,11 +61,12 @@ TASK_NODE_MAP = {
     "general_disaster_information": general_information_nodes
 }
 
+ROUTER_TASKS = list(TASK_NODE_MAP.keys())
 
-def add_context_nodes(task_type, message, nodes):
+
+def add_context_nodes(message, nodes):
     msg = message.lower()
 
-    # generic context
     if any(word in msg for word in ["road blocked", "roads blocked", "bridge collapsed", "route blocked"]):
         nodes.extend([
             "detect_blocked_routes",
@@ -103,7 +104,24 @@ def add_context_nodes(task_type, message, nodes):
     if any(word in msg for word in ["dead", "killed", "died", "fatalities"]):
         nodes.append("estimate_number_of_casualties")
 
-    # remove duplicates while preserving order
+    return list(dict.fromkeys(nodes))
+
+
+def get_active_tasks(row):
+    active_tasks = [task for task in ROUTER_TASKS if row[task] == 1]
+
+    if not active_tasks:
+        active_tasks = ["general_disaster_information"]
+
+    return active_tasks
+
+
+def get_required_nodes_from_tasks(active_tasks):
+    nodes = []
+
+    for task in active_tasks:
+        nodes.extend(TASK_NODE_MAP.get(task, []))
+
     return list(dict.fromkeys(nodes))
 
 
@@ -113,14 +131,14 @@ def build_planner_dataset(input_file, output_file):
 
     for _, row in df.iterrows():
         message = row["message"]
-        task_type = row["task_type"]
 
-        core_nodes = TASK_NODE_MAP.get(task_type, general_information_nodes).copy()
-        final_nodes = add_context_nodes(task_type, message, core_nodes)
+        active_tasks = get_active_tasks(row)
+        core_nodes = get_required_nodes_from_tasks(active_tasks)
+        final_nodes = add_context_nodes(message, core_nodes)
 
         planner_dataset.append({
             "message": message,
-            "task_type": task_type,
+            "active_tasks": active_tasks,
             "required_nodes": final_nodes
         })
 
@@ -130,10 +148,12 @@ def build_planner_dataset(input_file, output_file):
         json.dump(planner_dataset, f, indent=4)
 
     print(f"Planner dataset created with {len(planner_dataset)} samples")
+    print("Sample:")
+    print(json.dumps(planner_dataset[:2], indent=4))
 
 
 if __name__ == "__main__":
     build_planner_dataset(
-        "data/processed/router_dataset.csv",
-        "data/planner/processed/planner_dataset.json"
+        "data/processed/router_multilabel_dataset.csv",
+        "data/planner/processed/planner_multilabel_dataset.json"
     )
