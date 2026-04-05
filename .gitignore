@@ -18,6 +18,7 @@ venv/
 /src/executor/__pycache__
 /src/verifier/__pycache__
 /src/executor/tools/__pycache__
+/src/pipeline/__pycache__
 
 # Models
 planner_model/

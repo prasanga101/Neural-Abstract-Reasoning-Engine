@@ -4,6 +4,7 @@ from src.executor.resource_allocator import ResourceAllocator
 from src.executor.tool_registry import ToolRegistry
 import json
 
+
 class Executor:
     def __init__(self, reasoning_graph: ReasoningGraph, env: SimulationEnv, allocator: ResourceAllocator):
         self.reasoning_graph = reasoning_graph
@@ -19,9 +20,11 @@ class Executor:
 
     def execute(self):
         order = self.reasoning_graph.get_execution_order()
+        print(f"[Executor] Execution order: {order}", flush=True)
 
         for step_num, node_name in enumerate(order, start=1):
             node = self.reasoning_graph.nodes[node_name]
+            print(f"[Executor] Starting step {step_num}: {node.name}", flush=True)
 
             try:
                 output = self._execute_node(node)
@@ -36,6 +39,8 @@ class Executor:
                     "output": output
                 })
 
+                print(f"[Executor] Completed step {step_num}: {node.name}", flush=True)
+
             except Exception as e:
                 node.status = "failed"
 
@@ -46,17 +51,21 @@ class Executor:
                     "error": str(e)
                 })
 
+                print(f"[Executor] Failed at step {step_num}: {node.name} -> {e}", flush=True)
+
                 return {
                     "status": "failed",
                     "execution_trace": self.execution_trace,
                     "final_outputs": self.context
                 }
 
+        print("[Executor] Execution completed successfully.", flush=True)
         return {
             "status": "completed",
             "execution_trace": self.execution_trace,
             "final_outputs": self.context
         }
+
 
 if __name__ == "__main__":
     from src.slr.node_representation import ReasoningNode
@@ -92,10 +101,11 @@ if __name__ == "__main__":
     graph.add_edge("collect_sensor_data", "identify_alternative_routes")
     graph.add_edge("identify_alternative_routes", "optimize_transport_paths")
 
-
     graph.validate_graph()
 
-    env = SimulationEnv("There has been a major earthquake in Bengaluru, India with many critically injured people and blocked roads. Emergency responders need to identify the nearest hospitals and the best routes for ambulances immediately.")
+    env = SimulationEnv(
+        "There has been a major earthquake in Kathmandu, Nepalwith many critically injured people and blocked roads. Emergency responders need to identify the nearest hospitals and the best routes for ambulances immediately."
+    )
     allocator = ResourceAllocator(env)
 
     executor = Executor(graph, env, allocator)
@@ -104,10 +114,10 @@ if __name__ == "__main__":
     print("Final Status:", result["status"])
 
     print("\nExecution Trace:")
-    print(json.dumps(result["execution_trace"], indent=2, ensure_ascii=False))
+    print(json.dumps(result["execution_trace"], indent=2, ensure_ascii=False, default=str))
 
     print("\nFinal Outputs:")
-    print(json.dumps(result["final_outputs"], indent=2, ensure_ascii=False))
+    print(json.dumps(result["final_outputs"], indent=2, ensure_ascii=False, default=str))
 
     print("\nFinal Environment State:")
-    print(json.dumps(env.get_full_state(), indent=2, ensure_ascii=False))
+    print(json.dumps(env.get_full_state(), indent=2, ensure_ascii=False, default=str))
