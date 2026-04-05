@@ -42,6 +42,14 @@ TASK_NODE_MAP = {
         "generate_situation_reports"
     ],
 
+    "infrastructure_and_route_planning": [
+        "analyze_event_context",
+        "assess_infrastructure_damage",
+        "detect_blocked_routes",
+        "identify_alternative_routes",
+        "optimize_transport_paths"
+    ],
+
     "general_disaster_information": [
         "analyze_event_context",
         "retrieve_disaster_information",
@@ -49,5 +57,31 @@ TASK_NODE_MAP = {
     ]
 }
 
-MIN_ROUTER_CONFIDENCE = 0.7
+MIN_ROUTER_CONFIDENCE = 0.5
 DEFAULT_FALLBACK_TASK = "general_disaster_information"
+
+
+def map_tasks_to_nodes(predicted_tasks, confidence_scores=None):
+    """
+    Merge nodes from all predicted tasks.
+    Optionally filter tasks using confidence scores.
+    """
+    selected_tasks = []
+
+    for task in predicted_tasks:
+        if confidence_scores is None:
+            selected_tasks.append(task)
+        else:
+            score = confidence_scores.get(task, 0.0)
+            if score >= MIN_ROUTER_CONFIDENCE:
+                selected_tasks.append(task)
+
+    if not selected_tasks:
+        selected_tasks = [DEFAULT_FALLBACK_TASK]
+
+    nodes = []
+    for task in selected_tasks:
+        nodes.extend(TASK_NODE_MAP.get(task, []))
+
+    # remove duplicates while preserving order
+    return list(dict.fromkeys(nodes))
