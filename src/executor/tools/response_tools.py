@@ -1,70 +1,97 @@
 from src.executor.base_tools import BaseTool
 from src.executor.LLMdef.model import GeminiClient
 import requests
+import os
+import requests
+from dotenv import load_dotenv
+load_dotenv()
 class HospitalDispatchTool(BaseTool):
     def __init__(self):
         super().__init__(name="identify_nearest_hospitals")
+        self.geoapify_api_key = os.getenv("GEOAPIFY_API_KEY")
 
     def run(self, context: dict, env):
         event_context = env.get_state("event_context") or {}
         location = event_context.get("location", "Kathmandu")
 
-        try:
-            geo_response = requests.get(
-                "https://geocoding-api.open-meteo.com/v1/search",
-                params={"name": location, "count": 1},
-                timeout=5
-            )
-            geo_data = geo_response.json()
-            results = geo_data.get("results", [])
+        if not isinstance(location, str) or not location.strip():
+            location = "Kathmandu"
 
-            if not results:
+        location = location.strip()
+
+        hospital_list = []
+
+        try:
+            if not self.geoapify_api_key:
+                raise ValueError("GEOAPIFY_API_KEY is not set")
+
+            lat, lon = self._geocode_location(location)
+
+            if lat is None or lon is None:
                 env.update_state("nearby_hospitals", [])
                 return {"nearby_hospitals": []}
 
-            lat = results[0]["latitude"]
-            lon = results[0]["longitude"]
-
-            query = f"""
-[out:json];
-(
-  node["amenity"~"hospital|clinic"](around:50000,{lat},{lon});
-  way["amenity"~"hospital|clinic"](around:50000,{lat},{lon});
-  relation["amenity"~"hospital|clinic"](around:50000,{lat},{lon});
-);
-out center;
-"""
-
-            overpass_response = requests.get(
-                "https://overpass-api.de/api/interpreter",
-                params={"data": query},
-                timeout=10
+            url = (
+                "https://api.geoapify.com/v2/places"
+                f"?categories=healthcare.hospital"
+                f"&filter=circle:{lon},{lat},5000"
+                f"&limit=5"
+                f"&apiKey={self.geoapify_api_key}"
             )
 
-            data = overpass_response.json()
-            hospitals = data.get("elements", [])
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
 
-            hospital_list = []
-            for h in hospitals[:5]:
-                if h.get("type") == "node":
-                    h_lat = h.get("lat")
-                    h_lon = h.get("lon")
-                else:
-                    center = h.get("center", {})
-                    h_lat = center.get("lat")
-                    h_lon = center.get("lon")
+            features = data.get("features", [])
+
+            for feature in features:
+                props = feature.get("properties", {})
+                geometry = feature.get("geometry", {})
+                coords = geometry.get("coordinates", [])
+
+                name = (
+                    props.get("name")
+                    or props.get("formatted")
+                    or ""
+                ).strip()
+
+                if not name or len(coords) < 2:
+                    continue
 
                 hospital_list.append({
-                    "name": h.get("tags", {}).get("name", "Unknown"),
-                    "lat": h_lat,
-                    "lon": h_lon
+                    "name": name,
+                    "lat": coords[1],
+                    "lon": coords[0]
                 })
 
-        except Exception:
+        except Exception as e:
+            print(f"[HospitalDispatchTool ERROR] {e}")
             hospital_list = []
 
         env.update_state("nearby_hospitals", hospital_list)
         return {"nearby_hospitals": hospital_list}
+
+    def _geocode_location(self, location: str):
+        try:
+            response = requests.get(
+                "https://geocoding-api.open-meteo.com/v1/search",
+                params={"name": location, "count": 1},
+                timeout=5
+            )
+            response.raise_for_status()
+
+            data = response.json()
+            results = data.get("results", [])
+
+            if not results:
+                return None, None
+
+            return results[0]["latitude"], results[0]["longitude"]
+
+        except Exception as e:
+            print(f"[HospitalDispatchTool Geocoding ERROR] {e}")
+            return None, None
 
 
 class RescueTeamAllocationTool(BaseTool):

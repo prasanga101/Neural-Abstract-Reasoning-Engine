@@ -34,6 +34,19 @@ from src.executor.tools.routing_tools import (
     TransportOptimizationTool,
 )
 
+
+class DummyTool:
+    def __init__(self, name):
+        self.name = name
+
+    def run(self, context, env):
+        return {
+            "status": "skipped",
+            "node": self.name,
+            "message": f"{self.name} not implemented yet"
+        }
+
+
 class ToolRegistry:
     def __init__(self):
         self.tools = {
@@ -61,10 +74,11 @@ class ToolRegistry:
             "generate_situation_reports": SituationReportTool(),
             "detect_blocked_routes": BlockedRouteDetectionTool(),
             "identify_alternative_routes": AlternativeRouteTool(),
-            "optimize_transport_paths": TransportOptimizationTool()
+            "optimize_transport_paths": TransportOptimizationTool(),
         }
 
     def get_tool(self, tool_name: str):
         if tool_name not in self.tools:
-            raise ValueError(f"Tool {tool_name} not found in registry")
+            print(f"[Executor Warning] Tool {tool_name} not found. Using dummy tool.")
+            return DummyTool(tool_name)
         return self.tools[tool_name]
