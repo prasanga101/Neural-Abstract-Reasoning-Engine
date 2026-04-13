@@ -1,27 +1,100 @@
 from src.slr.node_representation import ReasoningNode
 from src.slr.reasoning_graph import ReasoningGraph
 
+
 class SLRBuilder:
-    def build(self , message , task_type, confidence , predicted_nodes):
-        clean_nodes = []
-        for node in predicted_nodes:
-            if node == "<END>":
-                break
-            if node and node not in clean_nodes:
-                clean_nodes.append(node)
-        if not clean_nodes:
-            raise ValueError("No valid nodes found in the predicted sequence")
-            
-        reasoning_graph = ReasoningGraph()
+    def __init__(self):
+        self.dependency_map = {
+            "retrieve_disaster_information": ["analyze_event_context"],
+            "assess_injury_severity": ["analyze_event_context"],
+            "collect_sensor_data": ["analyze_event_context"],
+            "estimate_number_of_casualties": [
+                "retrieve_disaster_information",
+                "assess_injury_severity"
+            ],
+            "identify_nearest_hospitals": ["analyze_event_context"],
+            "identify_alternative_routes": [
+                "collect_sensor_data",
+                "identify_nearest_hospitals",
+                "detect_blocked_routes"
+            ],
+            "optimize_transport_paths": ["identify_alternative_routes"],
+            "allocate_medical_supplies": ["analyze_resource_availability"],
+            "allocate_food_resources": ["analyze_resource_availability"],
+            "allocate_water_resources": ["analyze_resource_availability"],
+            "allocate_relief_resources": [
+                "estimate_population_demand",
+                "analyze_resource_availability"
+            ],
+            "allocate_resources": [
+                "estimate_population_demand",
+                "analyze_resource_availability"
+            ],
+            "dispatch_ambulances": [
+                "assess_injury_severity",
+                "identify_nearest_hospitals"
+            ],
+            "deploy_rescue_teams": [
+                "assess_structural_damage",
+                "locate_trapped_victims"
+            ],
+            "detect_blocked_routes": ["collect_sensor_data"],
+            "assess_structural_damage": ["analyze_event_context"],
+            "scan_disaster_zone": ["analyze_event_context"],
+            "locate_trapped_victims": ["scan_disaster_zone"],
+            "assess_infrastructure_damage": ["analyze_event_context"],
+            "monitor_disaster_activity": ["analyze_event_context"],
+            "analyze_disaster_data": ["collect_sensor_data"],
+            "generate_situation_reports": ["analyze_disaster_data"],
+            "generate_information_summary": ["retrieve_disaster_information"],
+            "update_public_reports": ["generate_information_summary"],
+            "dispatch_relief_teams": [
+                "allocate_relief_resources",
+                "prioritize_affected_regions"
+            ],
+            "coordinate_hospital_capacity": [
+                "identify_nearest_hospitals",
+                "assess_injury_severity"
+            ],
+            "prioritize_affected_regions": ["analyze_event_context"],
+            "estimate_population_demand": ["analyze_event_context"],
+            "analyze_resource_availability": ["analyze_event_context"],
+            "identify_supply_sources": ["analyze_event_context"],
+            "assess_population_needs": ["analyze_event_context"],
+        }
 
-        reasoning_graph.message = message
-        reasoning_graph.task_type = task_type
-        reasoning_graph.confidence = confidence
+    def _collect_with_dependencies(self, predicted_nodes):
+        final_nodes = set(predicted_nodes)
+        changed = True
 
-        previous_node = None
-        for i, node_name in enumerate(clean_nodes):
-            # Assign dependency (sequential for now)
-            dependencies = [previous_node.name] if previous_node else []
+        while changed:
+            changed = False
+            current_nodes = list(final_nodes)
+
+            for node in current_nodes:
+                for dep in self.dependency_map.get(node, []):
+                    if dep not in final_nodes:
+                        final_nodes.add(dep)
+                        changed = True
+
+        return list(final_nodes)
+
+    def build(self, message, predicted_tasks, confidence_scores, predicted_nodes):
+        if not predicted_nodes:
+            raise ValueError("No predicted nodes provided")
+
+        all_nodes = self._collect_with_dependencies(predicted_nodes)
+
+        graph = ReasoningGraph()
+        graph.message = message
+        graph.predicted_tasks = predicted_tasks
+        graph.confidence_scores = confidence_scores
+
+        for node_name in all_nodes:
+            dependencies = [
+                dep for dep in self.dependency_map.get(node_name, [])
+                if dep in all_nodes
+            ]
 
             node = ReasoningNode(
                 name=node_name,
@@ -30,71 +103,12 @@ class SLRBuilder:
                 inputs=[],
                 outputs=[],
                 dependencies=dependencies,
-                priority=i + 1,
+                priority=0,
                 status="pending"
             )
+            graph.add_node(node)
 
-            # Add node to graph
-            reasoning_graph.add_node(node)
+        graph.build_from_dependencies()
+        graph.validate_graph()
 
-            # Update previous node
-            previous_node = node
-
-        # -----------------------------
-        # Step 4: Build edges
-        # -----------------------------
-        reasoning_graph.build_from_dependencies()
-
-        # -----------------------------
-        # Step 5: Validate graph
-        # -----------------------------
-        reasoning_graph.validate_graph()
-
-        return reasoning_graph
-    
-if __name__ == "__main__":
-    # -----------------------------
-    # Mock planner output (test case)
-    # -----------------------------
-    message = "There is a tsunami in India, hundreds of people are displaced with critical injuries"
-    task_type = "medical_response"
-    confidence = 0.75
-
-    predicted_nodes = [
-        "assess_injury_severity",
-        "estimate_number_of_casualties",
-        "identify_nearest_hospitals",
-        "dispatch_ambulances",
-        "allocate_temporary_shelters",
-        "<END>"
-    ]
-
-    # -----------------------------
-    # Build SLR graph
-    # -----------------------------
-    builder = SLRBuilder()
-    graph = builder.build(message, task_type, confidence, predicted_nodes)
-
-    # -----------------------------
-    # Print results
-    # -----------------------------
-    print("\n--- SLR GRAPH TEST ---")
-
-    print("\nMessage:")
-    print(graph.message)
-
-    print("\nTask Type:", graph.task_type)
-    print("Confidence:", graph.confidence)
-
-    print("\nNodes:")
-    for node_name, node in graph.nodes.items():
-        print(f"  {node_name} | dependencies: {node.dependencies}")
-
-    print("\nEdges:")
-    for edge in graph.edges:
-        print(f"  {edge[0]} -> {edge[1]}")
-
-    print("\nExecution Order:")
-    execution_order = graph.get_execution_order()
-    for i, step in enumerate(execution_order, start=1):
-        print(f"  Step {i}: {step}")
+        return graph

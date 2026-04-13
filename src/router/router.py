@@ -1,15 +1,24 @@
-from task_classifier import predict_task
-from router_utils import load_router_components, get_recommended_tools, build_router_response
+from pprint import pprint
+from src.router.task_classifier import predict_tasks
+from src.router.router_utils import load_router_components, build_router_response
+from src.router.node_mapper import map_tasks_to_nodes
 
 
-def route_query(text, model, tokenizer, le):
-    task, confidence = predict_task(text, model, tokenizer, le)
-    tools = get_recommended_tools(task)
-    return build_router_response(task, confidence, tools)
+def route_query(text, model, tokenizer):
+    predicted_tasks, confidence_scores = predict_tasks(text, model, tokenizer)
+
+    nodes = map_tasks_to_nodes(predicted_tasks, confidence_scores)
+
+    return build_router_response(
+        input_text=text,
+        predicted_tasks=predicted_tasks,
+        confidence_scores=confidence_scores,
+        nodes=nodes
+    )
 
 
 if __name__ == "__main__":
-    model, tokenizer, le = load_router_components()
+    model, tokenizer = load_router_components()
     text = input("Enter the query: ")
-    result = route_query(text, model, tokenizer, le)
-    print(result)
+    result = route_query(text, model, tokenizer)
+    pprint(result)
