@@ -34,3 +34,11 @@ data/
 # Cache
 __pycache__/
 *.pyc
+
+# Frontend
+src/frontend/node_modules/
+src/frontend/dist/
+src/frontend/.vite/
+
+# OS
+.DS_Store

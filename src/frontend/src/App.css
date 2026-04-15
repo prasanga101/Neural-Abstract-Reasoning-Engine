@@ -1,0 +1,248 @@
+.app-shell {
+  height: 100vh;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.top-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-radius: 0;
+  box-shadow: none;
+  width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #1e3a8a;
+  min-width: 260px;
+  text-decoration: none;
+}
+
+.brand:hover {
+  opacity: 0.9;
+}
+
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #2563eb;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.brand-text strong {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #1e40af;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.brand-text small {
+  font-size: 0.7rem;
+  color: #3b82f6;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.center-controls {
+  flex: 1;
+  min-width: 200px;
+}
+
+.center-controls input {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 0.9rem;
+  background: #ffffff;
+  color: #111827;
+  box-sizing: border-box;
+}
+
+.right-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.right-controls select,
+.right-controls button {
+  height: 38px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  padding: 0 12px;
+  font-size: 0.84rem;
+  background: #ffffff;
+  color: #111827;
+}
+
+.right-controls .pipeline-inspector-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  color: #0f172a;
+  border-color: #dbe3ee;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  font-weight: 600;
+}
+
+.right-controls .pipeline-inspector-button:hover {
+  background: linear-gradient(180deg, #ffffff, #eef4ff);
+  color: #0f172a;
+  border-color: #c7d6ee;
+}
+
+.pipeline-inspector-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pipeline-inspector-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  display: block;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.78);
+}
+
+.pipeline-inspector-dots span:nth-child(1) {
+  background: #3b82f6;
+}
+
+.pipeline-inspector-dots span:nth-child(2) {
+  background: #8b5cf6;
+}
+
+.pipeline-inspector-dots span:nth-child(3) {
+  background: #10b981;
+}
+
+.pipeline-inspector-dots span:nth-child(4) {
+  background: #ef4444;
+}
+
+.right-controls button {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.right-controls button:hover {
+  background: #0f172a;
+}
+
+.threshold-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  height: 38px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.threshold-control label {
+  font-size: 0.78rem;
+  color: #4b5563;
+}
+
+.threshold-control input[type='range'] {
+  width: 90px;
+}
+
+.threshold-control span {
+  font-size: 0.78rem;
+  min-width: 24px;
+  text-align: right;
+  color: #111827;
+  font-weight: 600;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 1080px) {
+  .top-nav {
+    flex-wrap: wrap;
+  }
+
+  .center-controls {
+    order: 3;
+    width: 100%;
+  }
+
+  .right-controls {
+    margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    padding: 0;
+  }
+
+  .brand {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .brand-text strong,
+  .brand-text small {
+    white-space: normal;
+  }
+
+  .right-controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .threshold-control {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .threshold-control input[type='range'] {
+    flex: 1;
+    max-width: 220px;
+  }
+}
