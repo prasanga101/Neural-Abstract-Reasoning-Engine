@@ -104,7 +104,10 @@ const getStageById = (id) => STAGES.find((s) => s.id === id)
 
 function MiniSlrGraph({ slr }) {
   const points = slr.nodes.map((node, i) => ({
-    id: node.id, x: 26 + i * 34, y: i % 2 === 0 ? 38 : 82, label: node.label.slice(0, 5),
+    id: node.id ?? `slr-${i + 1}`,
+    x: 26 + i * 34,
+    y: i % 2 === 0 ? 38 : 82,
+    label: String(node.label ?? node.name ?? node.id ?? `N${i + 1}`).slice(0, 5),
   }))
   const pointMap = Object.fromEntries(points.map((p) => [p.id, p]))
   return (

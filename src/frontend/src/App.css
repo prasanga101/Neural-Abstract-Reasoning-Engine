@@ -159,6 +159,11 @@
   background: #0f172a;
 }
 
+.right-controls .run-button:disabled {
+  opacity: 0.72;
+  cursor: wait;
+}
+
 .threshold-control {
   display: flex;
   align-items: center;
@@ -185,6 +190,26 @@
   text-align: right;
   color: #111827;
   font-weight: 600;
+}
+
+.api-status {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  border-top: 1px solid #eef2f7;
+  border-bottom: 1px solid #eef2f7;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.79rem;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.api-status--error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fee2e2;
 }
 
 .sr-only {

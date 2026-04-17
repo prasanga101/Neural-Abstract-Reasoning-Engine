@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "sh -c 'python3 -m uvicorn src.api.server:app --reload --host 127.0.0.1 --port 8000 --app-dir ../.. & backend_pid=$!; vite --host 0.0.0.0 --port 5173; kill $backend_pid'",
+    "dev:ui": "vite --host 0.0.0.0 --port 5173",
+    "share": "ngrok http 5173",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
