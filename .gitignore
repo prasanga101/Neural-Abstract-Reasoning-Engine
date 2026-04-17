@@ -30,7 +30,7 @@ router_model/
 *.bin
 
 # Data
-data/
+
 
 # Cache
 __pycache__/
