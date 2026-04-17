@@ -20,12 +20,13 @@ class ReasoningPipeline:
         self.slr_builder = SLRBuilder()
         self.verifier = Verifier(api_key=verifier_api_key)
 
-    def run(self, message: str):
+    def run(self, message: str, threshold: float = 0.5):
         # 1. Router
         router_result = route_query(
             text=message,
             model=self.router_model,
-            tokenizer=self.router_tokenizer
+            tokenizer=self.router_tokenizer,
+            threshold=threshold
         )
 
         predicted_tasks = router_result["predicted_tasks"]
@@ -34,7 +35,8 @@ class ReasoningPipeline:
         # 2. Planner
         planner_result = predict_plan(
             message=message,
-            predicted_tasks=predicted_tasks
+            predicted_tasks=predicted_tasks,
+            threshold=threshold
         )
 
         predicted_nodes = planner_result["predicted_nodes"]
