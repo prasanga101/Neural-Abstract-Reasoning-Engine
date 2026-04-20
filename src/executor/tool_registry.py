@@ -21,6 +21,7 @@ from src.executor.tools.response_tools import (
     RescueTeamAllocationTool,
     SupplySourceIdentificationTool,
     InformationRetrievalTool,
+    RescueTeamAllocationTool,
 )
 from src.executor.tools.monitoring_tools import (
     DisasterMonitoringTool,
@@ -75,6 +76,7 @@ class ToolRegistry:
             "detect_blocked_routes": BlockedRouteDetectionTool(),
             "identify_alternative_routes": AlternativeRouteTool(),
             "optimize_transport_paths": TransportOptimizationTool(),
+            "dispatch_relief_teams": RescueTeamAllocationTool(),
         }
 
     def get_tool(self, tool_name: str):
