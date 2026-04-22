@@ -4,8 +4,13 @@ from src.router.router_utils import load_router_components, build_router_respons
 from src.router.node_mapper import map_tasks_to_nodes
 
 
-def route_query(text, model, tokenizer):
-    predicted_tasks, confidence_scores = predict_tasks(text, model, tokenizer)
+def route_query(text, model, tokenizer, threshold=0.5):
+    predicted_tasks, confidence_scores = predict_tasks(
+        text,
+        model,
+        tokenizer,
+        threshold=threshold
+    )
 
     nodes = map_tasks_to_nodes(predicted_tasks, confidence_scores)
 

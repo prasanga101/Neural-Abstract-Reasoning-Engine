@@ -180,3 +180,23 @@ Return ONLY valid JSON:
 
         env.update_state("disaster_information", disaster_info)
         return {"disaster_information": disaster_info}
+class RescueTeamAllocationTool(BaseTool):
+    def __init__(self):
+        super().__init__(name="dispatch_relief_teams")
+    def run(self,context:dict,env):
+        estimated_casualties=env.get_state("estimated_casualties")or 0
+        resources=env.get_state("relief_resources_allocated")or 0
+        teams_available=env.get_state("available_rescue_teams")or 10
+        teams_needed=max(1,estimated_casualties//50)
+        if resources>1000:
+            teams_needed+=2
+        max_dispatch_limit=max(1,int(teams_available*0.6))
+        teams_dispatched=min(teams_needed,max_dispatch_limit,teams_available)
+        remaining=teams_available-teams_dispatched
+        env.update_state("available_rescue_teams",remaining)
+        return{
+            "relief_teams_dispatched":teams_dispatched,
+            "teams_remaining":remaining,
+            "teams_needed":teams_needed,
+            "dispatch_limit":max_dispatch_limit
+        }

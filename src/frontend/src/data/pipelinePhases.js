@@ -1,0 +1,51 @@
+export const PIPELINE_PHASES = [
+  {
+    id: 'input',
+    title: 'Emergency Input',
+    accent: '#3b82f6',
+    accentBg: '#eff6ff',
+    accentGlow: 'rgba(59,130,246,0.2)',
+  },
+  {
+    id: 'router',
+    title: 'Router',
+    accent: '#8b5cf6',
+    accentBg: '#f5f3ff',
+    accentGlow: 'rgba(139,92,246,0.2)',
+  },
+  {
+    id: 'planner',
+    title: 'Planner',
+    accent: '#0ea5e9',
+    accentBg: '#f0f9ff',
+    accentGlow: 'rgba(14,165,233,0.2)',
+  },
+  {
+    id: 'slr',
+    title: 'SLR Graph',
+    accent: '#10b981',
+    accentBg: '#ecfdf5',
+    accentGlow: 'rgba(16,185,129,0.2)',
+  },
+  {
+    id: 'executor',
+    title: 'Executor',
+    accent: '#f59e0b',
+    accentBg: '#fffbeb',
+    accentGlow: 'rgba(245,158,11,0.2)',
+  },
+  {
+    id: 'verifier',
+    title: 'Verifier',
+    accent: '#ef4444',
+    accentBg: '#fef2f2',
+    accentGlow: 'rgba(239,68,68,0.2)',
+  },
+  {
+    id: 'final',
+    title: 'Final State',
+    accent: '#6366f1',
+    accentBg: '#eef2ff',
+    accentGlow: 'rgba(99,102,241,0.2)',
+  },
+]

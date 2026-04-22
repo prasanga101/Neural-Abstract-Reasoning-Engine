@@ -3,7 +3,16 @@ from src.executor.simulation_env import SimulationEnv
 from src.executor.resource_allocator import ResourceAllocator
 from src.executor.tool_registry import ToolRegistry
 import json
-
+def to_serializable(obj):
+    if isinstance(obj, dict):
+        return {k: to_serializable(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [to_serializable(i) for i in obj]
+    elif hasattr(obj, "item"):  # handles numpy / torch
+        return obj.item()
+    else:
+        return obj
+    
 class Executor:
     def __init__(self, reasoning_graph: ReasoningGraph, env: SimulationEnv, allocator: ResourceAllocator):
         self.reasoning_graph = reasoning_graph
@@ -51,28 +60,45 @@ class Executor:
                     "execution_trace": self.execution_trace,
                     "final_outputs": self.context
                 }
-
-        return {
+        result ={
             "status": "completed",
             "execution_trace": self.execution_trace,
             "final_outputs": self.context
         }
+        return to_serializable(result)
 
-if __name__ == "__main__":
+import json
+from src.slr.node_representation import ReasoningNode
+from src.slr.reasoning_graph import ReasoningGraph
+from src.executor.executor import Executor
+from src.executor.simulation_env import SimulationEnv
+from src.executor.resource_allocator import ResourceAllocator
+if __name__=="__main__":
+    import json
     from src.slr.node_representation import ReasoningNode
+    from src.slr.reasoning_graph import ReasoningGraph
+    from src.executor.executor import Executor
+    from src.executor.simulation_env import SimulationEnv
+    from src.executor.resource_allocator import ResourceAllocator
 
-    print("\n--- EXECUTOR TEST ---\n")
+    print("\n--- EXECUTOR TEST (FULL + UNKNOWN) ---\n")
 
-    node1 = ReasoningNode(name="analyze_event_context")
-    node2 = ReasoningNode(name="retrieve_disaster_information")
-    node3 = ReasoningNode(name="assess_injury_severity")
-    node4 = ReasoningNode(name="collect_sensor_data")
-    node5 = ReasoningNode(name="estimate_number_of_casualties")
-    node6 = ReasoningNode(name="identify_nearest_hospitals")
-    node7 = ReasoningNode(name="identify_alternative_routes")
-    node8 = ReasoningNode(name="optimize_transport_paths")
+    node1=ReasoningNode(name="analyze_event_context")
+    node2=ReasoningNode(name="retrieve_disaster_information")
+    node3=ReasoningNode(name="assess_injury_severity")
+    node4=ReasoningNode(name="collect_sensor_data")
+    node5=ReasoningNode(name="estimate_number_of_casualties")
+    node6=ReasoningNode(name="identify_nearest_hospitals")
+    node7=ReasoningNode(name="identify_alternative_routes")
+    node8=ReasoningNode(name="optimize_transport_paths")
+    node9=ReasoningNode(name="allocate_relief_resources")
+    node10=ReasoningNode(name="dispatch_relief_teams")
 
-    graph = ReasoningGraph()
+    # UNKNOWN TEST NODE
+    node11=ReasoningNode(name="unknown_test_node")
+
+    graph=ReasoningGraph()
+
     graph.add_node(node1)
     graph.add_node(node2)
     graph.add_node(node3)
@@ -81,33 +107,41 @@ if __name__ == "__main__":
     graph.add_node(node6)
     graph.add_node(node7)
     graph.add_node(node8)
+    graph.add_node(node9)
+    graph.add_node(node10)
+    graph.add_node(node11)
 
-    graph.add_edge("analyze_event_context", "retrieve_disaster_information")
-    graph.add_edge("analyze_event_context", "assess_injury_severity")
-    graph.add_edge("analyze_event_context", "collect_sensor_data")
-    graph.add_edge("retrieve_disaster_information", "estimate_number_of_casualties")
-    graph.add_edge("assess_injury_severity", "estimate_number_of_casualties")
-    graph.add_edge("analyze_event_context", "identify_nearest_hospitals")
-    graph.add_edge("identify_nearest_hospitals", "identify_alternative_routes")
-    graph.add_edge("collect_sensor_data", "identify_alternative_routes")
-    graph.add_edge("identify_alternative_routes", "optimize_transport_paths")
+    graph.add_edge("analyze_event_context","retrieve_disaster_information")
+    graph.add_edge("analyze_event_context","assess_injury_severity")
+    graph.add_edge("analyze_event_context","collect_sensor_data")
 
+    graph.add_edge("retrieve_disaster_information","estimate_number_of_casualties")
+    graph.add_edge("assess_injury_severity","estimate_number_of_casualties")
+
+    graph.add_edge("analyze_event_context","identify_nearest_hospitals")
+    graph.add_edge("identify_nearest_hospitals","identify_alternative_routes")
+    graph.add_edge("collect_sensor_data","identify_alternative_routes")
+    graph.add_edge("identify_alternative_routes","optimize_transport_paths")
+
+    graph.add_edge("estimate_number_of_casualties","allocate_relief_resources")
+    graph.add_edge("collect_sensor_data","allocate_relief_resources")
+    graph.add_edge("allocate_relief_resources","dispatch_relief_teams")
+
+    # UNKNOWN NODE CONNECTED LAST
+    graph.add_edge("dispatch_relief_teams","unknown_test_node")
 
     graph.validate_graph()
 
-    env = SimulationEnv("There is a major earthquake in Kathmandu, Nepal with critical injuries and many wounded people")
-    allocator = ResourceAllocator(env)
+    env=SimulationEnv("Massive earthquake in Kathmandu with injuries and resource shortage")
+    allocator=ResourceAllocator(env)
 
-    executor = Executor(graph, env, allocator)
-    result = executor.execute()
+    executor=Executor(graph,env,allocator)
+    result=executor.execute()
 
-    print("Final Status:", result["status"])
-
+    print("Final Status:",result["status"])
     print("\nExecution Trace:")
-    print(json.dumps(result["execution_trace"], indent=2, ensure_ascii=False))
-
+    print(json.dumps(result["execution_trace"],indent=2,ensure_ascii=False,default=float))
     print("\nFinal Outputs:")
-    print(json.dumps(result["final_outputs"], indent=2, ensure_ascii=False))
-
+    print(json.dumps(result["final_outputs"],indent=2,ensure_ascii=False,default=float))
     print("\nFinal Environment State:")
-    print(json.dumps(env.get_full_state(), indent=2, ensure_ascii=False))
+    print(json.dumps(env.get_full_state(),indent=2,ensure_ascii=False,default=float))
