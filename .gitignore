@@ -34,3 +34,6 @@ data/
 # Cache
 __pycache__/
 *.pyc
+
+src/frontend/.vite/
+*.csv
