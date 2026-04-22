@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import normalize
@@ -7,10 +9,12 @@ import numpy as np
 import pandas as pd
 
 BANDIT_STATE_DIM = 620
+REPO_ROOT = Path(__file__).resolve().parents[2]
+RAW_DATA_DIR = REPO_ROOT / "data" / "raw"
 
 class AbstractionLearning:
     def __init__(self):
-        # --- Layer 1: SBERT full (768-dim) ---
+        # --- Layer 1: SBERT full (384-dim for all-MiniLM-L6-v2) ---
         self.semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
 
         # --- Layer 2: TF-IDF weighted (200-dim via PCA) ---
@@ -53,7 +57,7 @@ class AbstractionLearning:
                 messages.tolist() if hasattr(messages, "tolist") else list(messages),
                 show_progress_bar=True,
                 batch_size=64
-            )  # (N, 768) — stored for potential lookup
+            )  # (N, 384) — stored for potential lookup
             print("[Abstraction] SBERT encoding complete.")
 
         # --- Layer 3: Label ---
@@ -68,8 +72,8 @@ class AbstractionLearning:
             print(f"[Abstraction] Label PCA fitted with dim={self.label_dim}")
 
     def extract(self, message):
-        # --- Layer 1: SBERT full (768-dim) ---
-        sbert_vec = self.semantic_model.encode([message])[0]  # (768,)
+        # --- Layer 1: SBERT full (384-dim) ---
+        sbert_vec = self.semantic_model.encode([message])[0]  # (384,)
 
         # --- Layer 2: TF-IDF → PCA (200-dim) ---
         tfidf_raw = self.vectorizer.transform([message]).toarray()  # (1, 5000)
@@ -84,7 +88,7 @@ class AbstractionLearning:
         else:
             label_vec = np.zeros(self.label_dim if self.label_dim else 36)
 
-        # --- Combine: 768 + 200 + 36 = 1004 ---
+        # --- Combine: 384 + 200 + 36 = 620 ---
         combined = np.concatenate([sbert_vec, tfidf_vec, label_vec])
 
         # Dimension guard
@@ -94,14 +98,14 @@ class AbstractionLearning:
             )
 
         combined = normalize(combined.reshape(1, -1))[0]
-        return combined  # (1004,)
+        return combined  # (620,)
 
 
 def init_abstraction():
     abstraction = AbstractionLearning()
 
-    messages_df   = pd.read_csv("data/raw/disaster_messages.csv")
-    categories_df = pd.read_csv("data/raw/disaster_categories.csv")
+    messages_df = pd.read_csv(RAW_DATA_DIR / "disaster_messages.csv")
+    categories_df = pd.read_csv(RAW_DATA_DIR / "disaster_categories.csv")
     df            = pd.merge(messages_df, categories_df, on="id")
 
     parsed    = df["categories"].apply(abstraction.parse_categories)
@@ -111,7 +115,7 @@ def init_abstraction():
     abstraction.fit(
         messages=df["message"],
         labels=parsed_df,
-        semantic_context=True
+        semantic_context=False
     )
 
     return abstraction

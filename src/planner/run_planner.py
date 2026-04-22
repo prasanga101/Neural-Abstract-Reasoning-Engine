@@ -1,4 +1,6 @@
 import pickle
+from pathlib import Path
+
 import torch
 from transformers import DistilBertTokenizer
 
@@ -6,7 +8,8 @@ from src.planner.transformer_planner import TransformerPlanner
 from src.router.router_utils import load_router_components
 from src.router.router import route_query
 
-SAVE_DIR = "planner_model"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SAVE_DIR = REPO_ROOT / "planner_model"
 
 
 def load_pickle(path):
@@ -15,9 +18,9 @@ def load_pickle(path):
 
 
 def load_planner():
-    node_to_idx = load_pickle(f"{SAVE_DIR}/node_to_idx.pkl")
-    idx_to_node = load_pickle(f"{SAVE_DIR}/idx_to_node.pkl")
-    meta = load_pickle(f"{SAVE_DIR}/planner_meta.pkl")
+    node_to_idx = load_pickle(SAVE_DIR / "node_to_idx.pkl")
+    idx_to_node = load_pickle(SAVE_DIR / "idx_to_node.pkl")
+    meta = load_pickle(SAVE_DIR / "planner_meta.pkl")
 
     tokenizer = DistilBertTokenizer.from_pretrained(SAVE_DIR)
 
@@ -38,7 +41,7 @@ def load_planner():
         num_nodes=meta["num_nodes"],
     ).to(device)
 
-    model.load_state_dict(torch.load(f"{SAVE_DIR}/planner_model.pt", map_location=device))
+    model.load_state_dict(torch.load(SAVE_DIR / "planner_model.pt", map_location=device))
     model.eval()
 
     return model, tokenizer, node_to_idx, idx_to_node, meta, device

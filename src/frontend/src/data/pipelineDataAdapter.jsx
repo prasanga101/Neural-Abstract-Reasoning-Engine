@@ -4,6 +4,12 @@ const EMPTY_PIPELINE_DATA = {
     tasks: [],
     scores: [],
     top: null,
+    rl: {
+      action: null,
+      injected: false,
+      source: null,
+      classifier_tasks: [],
+    },
   },
   planner: {
     nodes: [],
@@ -251,6 +257,12 @@ export function normalizePipelineData(rawData) {
       tasks: asArray(router.tasks),
       scores: asArray(router.scores),
       top: router.top ?? null,
+      rl: {
+        action: asObject(router.rl).action ?? null,
+        injected: Boolean(asObject(router.rl).injected),
+        source: asObject(router.rl).source ?? null,
+        classifier_tasks: asArray(asObject(router.rl).classifier_tasks),
+      },
     },
     planner: {
       nodes: asArray(planner.nodes),
@@ -340,6 +352,7 @@ export function buildPipelineSections(rawData) {
   const topTimelineNodes = quotedList(
     data.executor.timeline.map((step) => step?.node).filter(Boolean).slice(0, 4)
   )
+  const rlClassifierTasks = quotedList(data.router.rl.classifier_tasks.slice(0, 3))
   const routerPriorityOrder = data.router.scores.length
     ? data.router.scores.map((entry) => entry.task)
     : data.router.tasks
@@ -466,16 +479,27 @@ export function buildPipelineSections(rawData) {
             {topTasks
               ? ` It also surfaced related priorities such as ${topTasks}.`
               : ' No additional task candidates were returned in this run.'}
+            {data.router.rl.action
+              ? ` The RL policy selected "${data.router.rl.action}" and ${data.router.rl.injected ? 'injected it into' : 'aligned with'} the final route set.`
+              : ''}
           </p>
           <ExecutionOrder title="Task Priority Order" steps={routerPriorityOrder} />
         </div>
       ),
       details: <JsonBlock value={data.router} />,
       math: (
-        <p>
-          Router results are rendered directly from the JSON payload: predicted tasks, sorted scores,
-          and the promoted top intent.
-        </p>
+        <div>
+          <p style={{ margin: 0 }}>
+            Router results are rendered directly from the JSON payload: predicted tasks, sorted scores,
+            the promoted top intent, and RL routing metadata when present.
+          </p>
+          {data.router.rl.action ? (
+            <p style={{ margin: '8px 0 0' }}>
+              RL source: {data.router.rl.source ?? 'unknown'}
+              {rlClassifierTasks ? ` · classifier candidates: ${rlClassifierTasks}` : ''}
+            </p>
+          ) : null}
+        </div>
       ),
     },
     planner: {

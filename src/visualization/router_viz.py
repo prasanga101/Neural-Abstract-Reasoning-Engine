@@ -13,5 +13,6 @@ def build_router_viz(router_result):
             {"task": task, "score": round(score, 4)}
             for task, score in sorted_scores
         ],
-        "top": sorted_scores[0][0] if sorted_scores else None
+        "top": sorted_scores[0][0] if sorted_scores else None,
+        "rl": router_result.get("rl", {}),
     }

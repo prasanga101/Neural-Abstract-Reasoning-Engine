@@ -12,14 +12,15 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger("nare.api")
 logging.basicConfig(level=logging.INFO)
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CORS_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
-ROUTER_MODEL_DIR = Path("router_model")
-PLANNER_MODEL_DIR = Path("planner_model")
+ROUTER_MODEL_DIR = REPO_ROOT / "router_model"
+PLANNER_MODEL_DIR = REPO_ROOT / "planner_model"
 REQUIRED_ROUTER_FILES = [
     "config.json",
     "model.safetensors",

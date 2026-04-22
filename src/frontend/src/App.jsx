@@ -8,10 +8,33 @@ function getErrorMessage(payload, fallbackMessage) {
   if (!payload) return fallbackMessage
 
   if (typeof payload.detail === 'string') return payload.detail
+  if (payload.detail?.startup_error) {
+    return `${payload.detail.message} ${payload.detail.startup_error}`
+  }
   if (payload.detail?.message) return payload.detail.message
   if (payload.message) return payload.message
 
   return fallbackMessage
+}
+
+function getApiBaseUrl() {
+  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
+
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/+$/, '')
+  }
+
+  if (typeof window !== 'undefined' && /^https?:$/.test(window.location.protocol)) {
+    return ''
+  }
+
+  return 'http://127.0.0.1:8000'
+}
+
+function buildApiUrl(path) {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  const baseUrl = getApiBaseUrl()
+  return baseUrl ? `${baseUrl}${normalizedPath}` : normalizedPath
 }
 
 function App() {
@@ -41,7 +64,7 @@ function App() {
     setApiStatus('Running backend pipeline...')
 
     try {
-      const response = await fetch('/run', {
+      const response = await fetch(buildApiUrl('/run'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -67,7 +90,14 @@ function App() {
           : 'Backend run completed successfully.'
       )
     } catch (error) {
-      setApiError(error.message || 'Unable to reach the backend pipeline.')
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unable to reach the backend pipeline.'
+
+      setApiError(
+        errorMessage === 'The string did not match the expected pattern.'
+          ? 'The frontend could not build a valid backend URL. Start the API on http://127.0.0.1:8000 or set VITE_API_BASE_URL.'
+          : errorMessage
+      )
       setApiStatus('Backend request failed.')
     } finally {
       setIsRunning(false)
