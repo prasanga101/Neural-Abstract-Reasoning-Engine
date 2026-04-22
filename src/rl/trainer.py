@@ -100,10 +100,6 @@ print("\nTraining complete")
 with open(MODEL_PATH, "wb") as f:
     pickle.dump(agent, f)
 print(f"Model saved → {MODEL_PATH}")
-
-# =========================
-# SAVE LOG
-# =========================
 with open(LOG_PATH, "w", newline="") as f:
     writer = csv.DictWriter(f, fieldnames=["epoch", "avg_reward", "accuracy"])
     writer.writeheader()
