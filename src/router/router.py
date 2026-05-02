@@ -54,7 +54,7 @@ def route_query(text, model, tokenizer, threshold=0.5):
         rl_injected = True
 
     # --- FILTERING — use passed threshold, not hardcoded ---
-    TOP_K = 3
+    TOP_K = 5
 
     filtered = [
         (task, score)
