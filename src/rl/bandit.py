@@ -1,50 +1,30 @@
-import random
+import numpy as np
 
 class BanditAgent:
-    def __init__(self, actions):
-        self.actions = actions
-        self.q_values = {}        # {state: {action: value}}
-        self.action_counts = {}   # {state: {action: count}}
+    def __init__(self, actions, state_dim=620, alpha=0.01):
+        self.actions   = actions
+        self.alpha     = alpha
+        self.n_actions = len(actions)
+        self.state_dim = state_dim
 
-    def _get_state_key(self, state):
+        # Linear weights — one row per action
+        # This is what makes it contextual — W @ state
+        self.W = np.zeros((self.n_actions, state_dim))
+        self.action_index = {a: i for i, a in enumerate(actions)}
 
-        return tuple(state.nonzero()[0])
+    def select_action(self, state, epsilon=0.15):
+        # Epsilon greedy exploration
+        if np.random.random() < epsilon:
+            return np.random.choice(self.actions)
 
-    def select_action(self, state):
-        state_key = self._get_state_key(state)
-
- 
-        if state_key not in self.q_values:
-            self.q_values[state_key] = {a: 0.0 for a in self.actions}
-            self.action_counts[state_key] = {a: 0 for a in self.actions}
-
-        q_vals = self.q_values[state_key]
-
-        confidence = max(q_vals.values())
-        confidence = max(0, min(1, confidence))  # clamp
-
-        exploration_prob = 1 - confidence
-
-        if random.random() < exploration_prob:
-            return random.choice(self.actions)
-
-        max_q = max(q_vals.values())
-        best_actions = [a for a, q in q_vals.items() if q == max_q]
-
-        return random.choice(best_actions)
+        # Score each action via dot product with state
+        scores = self.W @ state  # (n_actions,)
+        best_idx = np.argmax(scores)
+        return self.actions[best_idx]
 
     def update_q_value(self, state, action, reward):
-        state_key = self._get_state_key(state)
-
-        if state_key not in self.q_values:
-            self.q_values[state_key] = {a: 0.0 for a in self.actions}
-            self.action_counts[state_key] = {a: 0 for a in self.actions}
-
-        self.action_counts[state_key][action] += 1
-        n = self.action_counts[state_key][action]
-
-        alpha = 1 / n
-
-        self.q_values[state_key][action] += alpha * (
-            reward - self.q_values[state_key][action]
-        )
+        idx = self.action_index[action]
+        # Gradient update — move weights toward rewarding state
+        prediction = self.W[idx] @ state
+        error      = reward - prediction
+        self.W[idx] += self.alpha * error * state

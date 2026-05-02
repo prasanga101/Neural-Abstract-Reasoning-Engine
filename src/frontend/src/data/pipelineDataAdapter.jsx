@@ -36,8 +36,26 @@ const EMPTY_PIPELINE_DATA = {
     shelters: 0,
     hospitals: [],
     blocked_routes: [],
+    blocked_route_details: [],
+    blocked_route_detection: null,
     routes: [],
     best_route: null,
+    routing_graph: null,
+    resolved_location: null,
+    event_coordinates: null,
+    infrastructure_damage: null,
+    disaster_zone_scan: null,
+    trapped_victims: null,
+    rescue_teams_allocated: null,
+    hospital_capacity_plan: null,
+    resource_allocation_plan: null,
+    information_summary: null,
+    public_report: null,
+    population_demands: null,
+    estimated_affected_population: null,
+    raster_population: null,
+    rasterio_population: null,
+    population_summary: null,
   },
 }
 
@@ -98,8 +116,25 @@ function formatScore(value) {
 function formatRoute(route) {
   if (!route || typeof route !== 'object') return null
   const parts = []
-  if (typeof route.distance === 'number') parts.push(`${roundNumber(route.distance)} km`)
-  if (typeof route.duration === 'number') parts.push(`${roundNumber(route.duration)} min`)
+  const distanceKm =
+    typeof route.distance_km === 'number'
+      ? route.distance_km
+      : typeof route.distance_m === 'number'
+        ? route.distance_m / 1000
+        : typeof route.distance === 'number'
+          ? route.distance / 1000
+          : null
+  const durationMin =
+    typeof route.duration_min === 'number'
+      ? route.duration_min
+      : typeof route.duration_s === 'number'
+        ? route.duration_s / 60
+        : typeof route.duration === 'number'
+          ? route.duration / 60
+          : null
+
+  if (typeof distanceKm === 'number') parts.push(`${roundNumber(distanceKm, 2)} km`)
+  if (typeof durationMin === 'number') parts.push(`${roundNumber(durationMin, 1)} min`)
   return parts.join(' · ')
 }
 
@@ -229,6 +264,54 @@ function ExecutionOrder({ title = 'Execution Order', steps = [] }) {
   )
 }
 
+function FormulaFlow({
+  title,
+  equation,
+  steps = [],
+  metrics = [],
+  accent = '#6366f1',
+}) {
+  return (
+    <div className="formula-flow" style={{ '--formula-accent': accent }}>
+      <div className="formula-flow__header">
+        <span className="formula-flow__pulse" />
+        <p>{title}</p>
+      </div>
+
+      <div className="formula-flow__equation">
+        {equation}
+      </div>
+
+      <div className="formula-flow__steps">
+        {steps.map((step, index) => (
+          <div
+            className="formula-flow__step"
+            key={`${title}-${step.label}-${index}`}
+            style={{ animationDelay: `${index * 120}ms` }}
+          >
+            <span className="formula-flow__index">{index + 1}</span>
+            <div>
+              <p>{step.label}</p>
+              <span>{step.value}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {metrics.length ? (
+        <div className="formula-flow__metrics">
+          {metrics.map((metric) => (
+            <div className="formula-flow__metric" key={`${title}-${metric.label}`}>
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function isPipelineVizData(value) {
   const data = asObject(value)
   return Boolean(
@@ -250,6 +333,13 @@ export function normalizePipelineData(rawData) {
   const executor = asObject(data.executor)
   const verifier = asObject(data.verifier)
   const state = asObject(data.state)
+  const populationDemands = state.population_demands ? asObject(state.population_demands) : null
+  const rasterPopulation = state.raster_population
+    ? asObject(state.raster_population)
+    : populationDemands
+  const rasterioPopulation = state.rasterio_population
+    ? asObject(state.rasterio_population)
+    : rasterPopulation
 
   return {
     message: typeof data.message === 'string' ? data.message : EMPTY_PIPELINE_DATA.message,
@@ -289,8 +379,33 @@ export function normalizePipelineData(rawData) {
       shelters: typeof state.shelters === 'number' ? state.shelters : 0,
       hospitals: asArray(state.hospitals),
       blocked_routes: asArray(state.blocked_routes),
+      blocked_route_details: asArray(state.blocked_route_details),
+      blocked_route_detection: state.blocked_route_detection
+        ? asObject(state.blocked_route_detection)
+        : null,
       routes: asArray(state.routes),
       best_route: asObject(state.best_route),
+      routing_graph: state.routing_graph ? asObject(state.routing_graph) : null,
+      resolved_location: state.resolved_location ? asObject(state.resolved_location) : null,
+      event_coordinates: state.event_coordinates ? asObject(state.event_coordinates) : null,
+      infrastructure_damage: state.infrastructure_damage ? asObject(state.infrastructure_damage) : null,
+      disaster_zone_scan: state.disaster_zone_scan ? asObject(state.disaster_zone_scan) : null,
+      trapped_victims: state.trapped_victims ? asObject(state.trapped_victims) : null,
+      rescue_teams_allocated:
+        typeof state.rescue_teams_allocated === 'number' ? state.rescue_teams_allocated : null,
+      hospital_capacity_plan: state.hospital_capacity_plan ? asObject(state.hospital_capacity_plan) : null,
+      resource_allocation_plan: state.resource_allocation_plan ? asObject(state.resource_allocation_plan) : null,
+      information_summary: state.information_summary ? asObject(state.information_summary) : null,
+      public_report: state.public_report ? asObject(state.public_report) : null,
+      population_demands: populationDemands,
+      estimated_affected_population:
+        typeof state.estimated_affected_population === 'number'
+          ? state.estimated_affected_population
+          : null,
+      raster_population: rasterPopulation,
+      rasterio_population: rasterioPopulation,
+      population_summary:
+        typeof state.population_summary === 'string' ? state.population_summary : null,
     },
   }
 }
@@ -342,6 +457,13 @@ export function buildPipelineSections(rawData) {
   const skippedSteps = data.executor.timeline.filter((step) => step.status === 'skipped').length
   const failedSteps = data.executor.timeline.filter((step) => step.status === 'failed').length
   const bestRoute = formatRoute(data.state.best_route)
+  const bestRouteHospital = data.state.best_route?.hospital
+  const topRouterScore = data.router.scores.find((entry) => entry.task === data.router.top)?.score
+  const topPlannerScore = data.planner.scores.find((entry) => entry.node === data.planner.top)?.score
+  const rasterPopulation = data.state.raster_population ?? data.state.population_demands
+  const rasterRadius = rasterPopulation?.radius_km
+  const rasterSource = rasterPopulation?.source ?? 'unknown'
+  const bestRouteDistance = bestRoute ?? 'no route selected'
   const plannerPreview = quotedList(data.planner.nodes.slice(0, 3))
   const topSlrOrder = quotedList(data.slr.order.slice(0, 4))
   const topHospitals = quotedList(
@@ -427,12 +549,27 @@ export function buildPipelineSections(rawData) {
     )
   }
 
+  if (data.state.population_demands) {
+    const { demand_level, source } = data.state.population_demands
+    const pop = data.state.estimated_affected_population
+    finalStateSentences.push(
+      data.state.population_summary ??
+        `Population demand estimated as ${demand_level}${
+          pop ? ` with approximately ${pop.toLocaleString()} people affected` : ''
+        } (source: ${source}).`
+    )
+  }
+
   if (mentionsRouting || data.state.routes.length || data.state.blocked_routes.length) {
     if (data.state.routes.length) {
       finalStateSentences.push(
         `${data.state.routes.length} route option${
           data.state.routes.length === 1 ? '' : 's'
-        } were produced${bestRoute ? `, with a best route of ${bestRoute}` : ''}.`
+        } were produced${
+          bestRoute
+            ? `; best route is to ${bestRouteHospital ? `"${bestRouteHospital}"` : 'the selected hospital'} at ${bestRoute}`
+            : ''
+        }.`
       )
     } else if (mentionsRouting) {
       finalStateSentences.push(
@@ -441,8 +578,13 @@ export function buildPipelineSections(rawData) {
     }
 
     if (data.state.blocked_routes.length) {
+      const detection = data.state.blocked_route_detection
+      const sourceText = detection?.source ? ` from ${detection.source}` : ''
+      const simulatedText = detection?.simulated ? ' as risk-based candidates' : ''
       finalStateSentences.push(
-        `Blocked corridors were identified${topBlockedRoutes ? `, including ${topBlockedRoutes}` : ''}.`
+        `Blocked corridors were identified${sourceText}${simulatedText}${
+          topBlockedRoutes ? `, including ${topBlockedRoutes}` : ''
+        }.`
       )
     }
   }
@@ -464,10 +606,20 @@ export function buildPipelineSections(rawData) {
       ),
       details: <JsonBlock value={{ message: data.message }} />,
       math: (
-        <p>
-          Input text is prepared as a context signal for the rest of the pipeline. The frontend will
-          faithfully display whatever normalized pipeline JSON you send for this stage.
-        </p>
+        <FormulaFlow
+          title="Context Encoding"
+          accent="#0ea5e9"
+          equation="h₀ = encode(split(message))"
+          steps={[
+            { label: 'Tokenize report', value: `${chunkCount(data.message)} semantic chunk${chunkCount(data.message) === 1 ? '' : 's'}` },
+            { label: 'Keep location signal', value: data.state.resolved_location?.query ?? 'location inferred downstream' },
+            { label: 'Seed pipeline state', value: 'message → router context vector' },
+          ]}
+          metrics={[
+            { label: 'characters', value: data.message.length },
+            { label: 'chunks', value: chunkCount(data.message) },
+          ]}
+        />
       ),
     },
     router: {
@@ -488,18 +640,21 @@ export function buildPipelineSections(rawData) {
       ),
       details: <JsonBlock value={data.router} />,
       math: (
-        <div>
-          <p style={{ margin: 0 }}>
-            Router results are rendered directly from the JSON payload: predicted tasks, sorted scores,
-            the promoted top intent, and RL routing metadata when present.
-          </p>
-          {data.router.rl.action ? (
-            <p style={{ margin: '8px 0 0' }}>
-              RL source: {data.router.rl.source ?? 'unknown'}
-              {rlClassifierTasks ? ` · classifier candidates: ${rlClassifierTasks}` : ''}
-            </p>
-          ) : null}
-        </div>
+        <FormulaFlow
+          title="Task Routing"
+          accent="#2563eb"
+          equation="tasks = {t | σ(Wᵣh₀ + bᵣ) ≥ τ} ∪ πᴿᴸ(h₀)"
+          steps={[
+            { label: 'Score task families', value: data.router.scores.slice(0, 3).map((row) => `${row.task}:${formatScore(row.score)}`).join(' · ') || 'no scores' },
+            { label: 'Apply threshold', value: `${data.router.tasks.length} task${data.router.tasks.length === 1 ? '' : 's'} selected` },
+            { label: 'RL adjustment', value: data.router.rl.action ? `${data.router.rl.action}${data.router.rl.injected ? ' injected' : ' aligned'}` : 'no RL action' },
+          ]}
+          metrics={[
+            { label: 'top', value: data.router.top ?? 'none' },
+            { label: 'top score', value: topRouterScore != null ? formatScore(topRouterScore) : 'n/a' },
+            { label: 'source', value: data.router.rl.source ?? 'classifier' },
+          ]}
+        />
       ),
     },
     planner: {
@@ -518,10 +673,20 @@ export function buildPipelineSections(rawData) {
       ),
       details: <JsonBlock value={data.planner} />,
       math: (
-        <p>
-          Planner display is derived from the real planner JSON: predicted nodes, score ordering, and
-          the chosen top action for execution.
-        </p>
+        <FormulaFlow
+          title="Node Planning"
+          accent="#7c3aed"
+          equation="P(nodeᵢ) = σ(Transformer([tasks; message])ᵢ)"
+          steps={[
+            { label: 'Fuse intent and text', value: `${data.router.tasks.length} routed task signals` },
+            { label: 'Rank reasoning nodes', value: data.planner.scores.slice(0, 3).map((row) => `${row.node}:${formatScore(row.score)}`).join(' · ') || 'no node scores' },
+            { label: 'Emit plan set', value: `${data.planner.nodes.length} node${data.planner.nodes.length === 1 ? '' : 's'} selected` },
+          ]}
+          metrics={[
+            { label: 'top node', value: data.planner.top ?? 'none' },
+            { label: 'top score', value: topPlannerScore != null ? formatScore(topPlannerScore) : 'n/a' },
+          ]}
+        />
       ),
     },
     slr: {
@@ -538,10 +703,21 @@ export function buildPipelineSections(rawData) {
       ),
       details: <JsonBlock value={data.slr} />,
       math: (
-        <p>
-          SLR phase is visualized from the graph JSON itself: node set, dependency edges, and the final
-          execution order emitted by your symbolic reasoning layer.
-        </p>
+        <FormulaFlow
+          title="Symbolic Dependency Resolution"
+          accent="#8b5cf6"
+          equation="G = (V, E), order = topo_sort(G)"
+          steps={[
+            { label: 'Create node set', value: `|V| = ${data.slr.nodes.length}` },
+            { label: 'Attach dependency edges', value: `|E| = ${data.slr.edges.length}` },
+            { label: 'Resolve execution order', value: data.slr.order.slice(0, 4).join(' → ') || 'no order' },
+          ]}
+          metrics={[
+            { label: 'nodes', value: data.slr.nodes.length },
+            { label: 'edges', value: data.slr.edges.length },
+            { label: 'first', value: data.slr.order[0] ?? 'n/a' },
+          ]}
+        />
       ),
     },
     executor: {
@@ -563,10 +739,21 @@ export function buildPipelineSections(rawData) {
       ),
       details: <JsonBlock value={data.executor} />,
       math: (
-        <p>
-          Execution details are generated from the live trace JSON, so each step, node name, and status
-          reflects the actual run you provide.
-        </p>
+        <FormulaFlow
+          title="State Transition Execution"
+          accent="#059669"
+          equation="Sₜ₊₁ = toolₙ(Sₜ, context)"
+          steps={[
+            { label: 'Read graph order', value: `${data.executor.timeline.length} scheduled step${data.executor.timeline.length === 1 ? '' : 's'}` },
+            { label: 'Mutate environment', value: topTimelineNodes ? `recent nodes: ${topTimelineNodes}` : 'waiting for trace' },
+            { label: 'Collect trace', value: `${completedSteps} completed · ${skippedSteps} skipped · ${failedSteps} failed` },
+          ]}
+          metrics={[
+            { label: 'status', value: data.executor.status },
+            { label: 'completed', value: completedSteps },
+            { label: 'skipped', value: skippedSteps },
+          ]}
+        />
       ),
     },
     verifier: {
@@ -581,10 +768,21 @@ export function buildPipelineSections(rawData) {
       ),
       details: <JsonBlock value={data.verifier} />,
       math: (
-        <p>
-          Verifier output is read straight from the JSON payload, including overall validity, per-check
-          results, and the explanation text.
-        </p>
+        <FormulaFlow
+          title="Verification Fusion"
+          accent="#e11d48"
+          equation="valid = rule_check(S*) ∧ model_validate(trace, S*)"
+          steps={[
+            { label: 'Rule checker', value: data.verifier.rule ? 'passed' : 'failed' },
+            { label: 'Model verifier', value: data.verifier.gemini ? 'passed' : 'failed' },
+            { label: 'Final verdict', value: data.verifier.valid ? 'valid response state' : 'invalid response state' },
+          ]}
+          metrics={[
+            { label: 'rule', value: data.verifier.rule ? 'true' : 'false' },
+            { label: 'gemini', value: data.verifier.gemini ? 'true' : 'false' },
+            { label: 'valid', value: data.verifier.valid ? 'true' : 'false' },
+          ]}
+        />
       ),
     },
     final: {
@@ -599,10 +797,21 @@ export function buildPipelineSections(rawData) {
       ),
       details: <JsonBlock value={data.state} />,
       math: (
-        <p>
-          Final state content comes from the returned environment snapshot, including route options,
-          hospital metadata, blocked routes, and the selected best route.
-        </p>
+        <FormulaFlow
+          title="Final State Synthesis"
+          accent="#6d28d9"
+          equation="S* = aggregate(hospitals, Dijkstra(G), Σ raster cells)"
+          steps={[
+            { label: 'Nearest hospital candidates', value: `${data.state.hospitals.length} hospital option${data.state.hospitals.length === 1 ? '' : 's'}` },
+            { label: 'Dijkstra route selection', value: bestRouteHospital ? `${bestRouteHospital} · ${bestRouteDistance}` : bestRouteDistance },
+            { label: 'Raster demand estimate', value: `${data.state.estimated_affected_population?.toLocaleString() ?? 'unknown'} affected · radius ${rasterRadius ?? 'n/a'} km` },
+          ]}
+          metrics={[
+            { label: 'best hospital', value: bestRouteHospital ?? 'n/a' },
+            { label: 'route', value: bestRouteDistance },
+            { label: 'population source', value: rasterSource },
+          ]}
+        />
       ),
     },
   }

@@ -12,6 +12,28 @@ import { PhaseInspectorModal } from './PhaseInspectorModal'
 
 const phaseOrder = ['input', 'router', 'planner', 'slr', 'executor', 'verifier', 'final']
 
+function formatRoute(route) {
+  const distanceKm =
+    typeof route?.distance_km === 'number'
+      ? route.distance_km
+      : typeof route?.distance_m === 'number'
+        ? route.distance_m / 1000
+        : typeof route?.distance === 'number'
+          ? route.distance / 1000
+          : null
+  const durationMin =
+    typeof route?.duration_min === 'number'
+      ? route.duration_min
+      : typeof route?.duration_s === 'number'
+        ? route.duration_s / 60
+        : typeof route?.duration === 'number'
+          ? route.duration / 60
+          : null
+
+  if (distanceKm == null || durationMin == null) return null
+  return `${distanceKm.toFixed(2)} km / ${durationMin.toFixed(1)} min`
+}
+
 function DetailList({ items }) {
   return (
     <ul className="space-y-1">
@@ -59,7 +81,26 @@ export function ReasoningCanvas({ data }) {
   )
 
   const inspectorMap = useMemo(
-    () => ({
+    () => {
+      const populationDemands = data.state.population_demands
+      const affectedPopulation =
+        data.state.estimated_affected_population ??
+        populationDemands?.estimated_affected_population
+      const populationDetail = populationDemands
+        ? `raster population: ${
+            affectedPopulation?.toLocaleString() ?? 'unknown'
+          } affected / ${populationDemands.demand_level ?? 'unknown'} demand / source: ${
+            populationDemands.source ?? 'unknown'
+          }`
+        : 'raster population: not available'
+      const bestRoute = data.state.best_route
+      const bestRouteStats = formatRoute(bestRoute)
+      const bestRouteDetail =
+        bestRouteStats
+          ? `best route: ${bestRoute.hospital ?? 'selected hospital'} / ${bestRouteStats}`
+          : 'best route: not available'
+
+      return ({
       input: {
         title: 'Emergency Input Context',
         sections: {
@@ -200,8 +241,9 @@ export function ReasoningCanvas({ data }) {
               items={[
                 `ambulances: ${data.state.ambulances}`,
                 `shelters: ${data.state.shelters}`,
+                populationDetail,
                 `blocked routes: ${data.state.blocked_routes.join(', ')}`,
-                `best route: ${data.state.best_route.distance} km / ${data.state.best_route.duration} min`,
+                bestRouteDetail,
               ]}
             />
           ),
@@ -215,7 +257,7 @@ export function ReasoningCanvas({ data }) {
           ),
         },
       },
-    }),
+    })},
     [data]
   )
 

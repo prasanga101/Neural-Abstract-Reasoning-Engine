@@ -10,7 +10,7 @@ import pickle
 # SAFE PATH LOADING
 # =========================
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-BANDIT_PATH = BASE_DIR / "src" / "rl" / "bandit.pkl"
+BANDIT_PATH = BASE_DIR / "src" / "rl" / "bandit_full.pkl"
 
 with open(BANDIT_PATH, "rb") as f:
     agent = pickle.load(f)

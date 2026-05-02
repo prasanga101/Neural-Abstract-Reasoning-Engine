@@ -1,9 +1,11 @@
 import os
 import json
+from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 
-load_dotenv()
+REPO_ROOT = Path(__file__).resolve().parents[3]
+load_dotenv(REPO_ROOT / ".env")
 
 
 class GeminiClient:

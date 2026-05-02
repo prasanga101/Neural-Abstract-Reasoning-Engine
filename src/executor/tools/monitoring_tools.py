@@ -1,4 +1,5 @@
 from src.executor.base_tools import BaseTool
+from src.executor.geo_utils import geocode_location
 import requests
 
 class DisasterMonitoringTool(BaseTool):
@@ -18,16 +19,21 @@ class SensorCollectionTool(BaseTool):
         event_context = env.get_state("event_context") or {}
         location = event_context.get("location", "Kathmandu")
         try:
-            geo_response = requests.get(
-                "https://geocoding-api.open-meteo.com/v1/search",
-                params={"name": location, "count": 1},
-                timeout=5
-            )
-            geo_data = geo_response.json()
-            results = geo_data.get("results", [])
-            if results:
-                latitude = results[0].get("latitude")
-                longitude = results[0].get("longitude")
+            resolved_location = env.get_state("resolved_location") or geocode_location(location)
+            if not resolved_location:
+                raise ValueError(f"Could not geocode location: {location}")
+
+            latitude = resolved_location["latitude"]
+            longitude = resolved_location["longitude"]
+
+            env.update_state("resolved_location", resolved_location)
+            env.update_state("event_coordinates", {
+                "latitude": latitude,
+                "longitude": longitude,
+                "location": resolved_location.get("formatted") or location,
+                "source": resolved_location.get("source"),
+            })
+
             weather_response = requests.get(
                 "https://api.open-meteo.com/v1/forecast",
                 params={
@@ -43,6 +49,8 @@ class SensorCollectionTool(BaseTool):
                 "location": location,
                 "latitude": latitude,
                 "longitude": longitude,
+                "resolved_location": resolved_location.get("formatted"),
+                "geocode_source": resolved_location.get("source"),
                 "temperature": current.get("temperature"),
                 "windspeed": current.get("windspeed")
             }

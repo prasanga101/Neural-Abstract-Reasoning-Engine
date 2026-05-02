@@ -6,6 +6,7 @@ TASK_NODE_MAP = {
         "collect_sensor_data",
         "estimate_number_of_casualties",
         "identify_nearest_hospitals",
+        "coordinate_hospital_capacity",
         "identify_alternative_routes",
         "optimize_transport_paths"
     ],
@@ -14,6 +15,9 @@ TASK_NODE_MAP = {
         "analyze_event_context",
         "collect_sensor_data",
         "detect_blocked_routes",
+        "assess_infrastructure_damage",
+        "scan_disaster_zone",
+        "locate_trapped_victims",
         "identify_alternative_routes",
         "deploy_rescue_teams"
     ],
@@ -22,10 +26,12 @@ TASK_NODE_MAP = {
         "analyze_event_context",
         "estimate_population_demand",
         "analyze_resource_availability",
+        "allocate_temporary_shelters",
         "allocate_relief_resources",
         "allocate_food_resources",
         "allocate_water_resources",
-        "allocate_medical_supplies"
+        "allocate_medical_supplies",
+        "allocate_resources"
     ],
 
     "relief_distribution": [
@@ -53,7 +59,9 @@ TASK_NODE_MAP = {
     "general_disaster_information": [
         "analyze_event_context",
         "retrieve_disaster_information",
-        "collect_sensor_data"
+        "collect_sensor_data",
+        "generate_information_summary",
+        "update_public_reports"
     ]
 }
 

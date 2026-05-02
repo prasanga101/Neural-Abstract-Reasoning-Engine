@@ -4,6 +4,7 @@ class RuleChecker:
         state = env.get_full_state()
 
         errors.extend(self._check_negative_values(state))
+        errors.extend(self._check_node_statuses(execution_trace))
         errors.extend(self._check_required_outputs(state, execution_trace))
         errors.extend(self._check_dependency_rules(state, execution_trace))
 
@@ -18,6 +19,30 @@ class RuleChecker:
         for key, value in state.items():
             if isinstance(value, (int, float)) and value < 0:
                 errors.append(f"{key} cannot be negative")
+
+        return errors
+
+    def _check_node_statuses(self, execution_trace):
+        errors = []
+
+        for step in execution_trace:
+            node = step.get("node", "unknown")
+            status = step.get("status")
+
+            if status == "skipped":
+                message = step.get("output", {}).get("message") if isinstance(step.get("output"), dict) else None
+                errors.append(
+                    f"{node} was skipped"
+                    + (f": {message}" if message else "")
+                )
+            elif status == "failed":
+                error = step.get("error")
+                errors.append(
+                    f"{node} failed"
+                    + (f": {error}" if error else "")
+                )
+            elif status != "completed":
+                errors.append(f"{node} ended with invalid status {status}")
 
         return errors
 
