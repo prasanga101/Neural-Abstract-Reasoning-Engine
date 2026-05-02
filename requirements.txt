@@ -1,0 +1,28 @@
+# Core ML / Deep Learning
+torch
+transformers
+sentence-transformers
+datasets
+
+# Numerical / Data
+numpy
+pandas
+scikit-learn
+
+# Web Frameworks & API
+fastapi
+flask
+pydantic
+uvicorn
+
+# HTTP
+requests
+
+# Environment / Config
+python-dotenv
+
+# Google Gemini
+google-genai
+
+# Geospatial
+rasterio
