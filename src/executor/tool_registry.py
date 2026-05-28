@@ -8,6 +8,8 @@ from src.executor.tools.assessment_tools import (
     PopulationDemandsEstimateTool,
     RegionAccessibilityTool,
     EventContextAnalysisTool,
+    ScanDisasterZoneTool,
+    AssessInfrastructureDamageTool,
 )
 from src.executor.tools.allocation_tools import (
     AmbulanceDispatchTool,
@@ -20,15 +22,14 @@ from src.executor.tools.allocation_tools import (
 )
 from src.executor.tools.response_tools import (
     HospitalDispatchTool,
-    RescueTeamDeploymentTool,
+    DeployRescueTeamsTool,
+    RescueTeamAllocationTool,
     SupplySourceIdentificationTool,
     InformationRetrievalTool,
-    DisasterZoneScanTool,
-    TrappedVictimLocationTool,
-    InformationSummaryTool,
-    PublicReportUpdateTool,
-    HospitalCapacityCoordinationTool,
-    ReliefTeamDispatchTool,
+    LocateTrappedVictimsTool,
+    GenerateInformationSummaryTool,
+    UpdatePublicReportsTool,
+    CoordinateHospitalCapacityTool,
 )
 from src.executor.tools.monitoring_tools import (
     DisasterMonitoringTool,
@@ -75,7 +76,7 @@ class ToolRegistry:
             "allocate_medical_supplies": MedicalSupplyAllocationTool(),
             "allocate_resources": AggregateResourceAllocationTool(),
             "identify_nearest_hospitals": HospitalDispatchTool(),
-            "deploy_rescue_teams": RescueTeamDeploymentTool(),
+            "deploy_rescue_teams": DeployRescueTeamsTool(),
             "identify_supply_sources": SupplySourceIdentificationTool(),
             "retrieve_disaster_information": InformationRetrievalTool(),
             "scan_disaster_zone": DisasterZoneScanTool(),
@@ -87,10 +88,17 @@ class ToolRegistry:
             "collect_sensor_data": SensorCollectionTool(),
             "analyze_disaster_data": DisasterAnalysisTool(),
             "generate_situation_reports": SituationReportTool(),
+            "scan_disaster_zone": ScanDisasterZoneTool(),
+            "assess_infrastructure_damage": AssessInfrastructureDamageTool(),
+            "locate_trapped_victims": LocateTrappedVictimsTool(),
+            "generate_information_summary": GenerateInformationSummaryTool(),
+            "update_public_reports": UpdatePublicReportsTool(),
+            "coordinate_hospital_capacity": CoordinateHospitalCapacityTool(),
             "detect_blocked_routes": BlockedRouteDetectionTool(),
             "identify_alternative_routes": AlternativeRouteTool(),
             "optimize_transport_paths": TransportOptimizationTool(),
-            "dispatch_relief_teams": ReliefTeamDispatchTool(),
+            "dispatch_relief_teams": RescueTeamAllocationTool(),
+            "allocate_resources": ReliefAllocationTool(),
         }
 
     def get_tool(self, tool_name: str):

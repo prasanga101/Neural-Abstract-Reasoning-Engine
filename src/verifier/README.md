@@ -49,8 +49,8 @@ If the model call fails or returns malformed output, the verifier falls back to:
 
 ```json
 {
-  "valid": false,
-  "reason": "Gemini verification failed: ..."
+  "valid": null,
+  "reason": "Ollama verification unavailable: ..."
 }
 ```
 
@@ -65,13 +65,17 @@ This makes the verifier conservative by design.
 
 ## Environment requirements
 
-This module requires:
+This module expects a local Ollama server. The default URL is `http://localhost:11434`.
 
-- `GEMINI_API_KEY`
+You can optionally set:
 
-Without that environment variable, the API readiness checks will report the verifier as unavailable.
+- `OLLAMA_BASE_URL`
+- `OLLAMA_MODEL`
+- `OLLAMA_VERIFIER_MODEL`
+
+If omitted, the verifier defaults to `llama3.2`.
 
 ## Notes
 
-- The current client code uses `google.genai` and a configured `model_name` of `models/gemma-3-4b-it`.
+- The current client code calls Ollama's local `/api/generate` endpoint and requests JSON output.
 - The model verifier is useful for semantic judgment, while the rule checker guards against obvious structural errors.

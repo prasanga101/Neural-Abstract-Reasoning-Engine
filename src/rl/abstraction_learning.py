@@ -13,6 +13,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import numpy as np
 import pandas as pd
+import torch
+
+_SBERT_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Dimensions per ablation mode
 STATE_DIMS = {
@@ -28,7 +31,8 @@ RAW_DATA_DIR     = REPO_ROOT / "data" / "raw"
 
 class AbstractionLearning:
     def __init__(self):
-        print(f"[Abstraction] Using device: {DEVICE}")
+        # --- Layer 1: SBERT full (384-dim for all-MiniLM-L6-v2) ---
+        self.semantic_model = SentenceTransformer("all-MiniLM-L6-v2", device=_SBERT_DEVICE)
 
         # --- Layer 1: SBERT (384-dim) ---
         self.semantic_model = SentenceTransformer("all-MiniLM-L6-v2", device=DEVICE)

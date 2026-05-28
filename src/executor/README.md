@@ -80,3 +80,7 @@ The allocator then caps allocation by current availability and writes the update
 - Input graph from [../slr/reasoning_graph.py](../slr/reasoning_graph.py)
 - Verification by [../verifier/verifier.py](../verifier/verifier.py)
 - Orchestration by [../pipeline/reasoning_pipeline.py](../pipeline/reasoning_pipeline.py)
+
+## Environment
+
+LLM-backed executor tools call local Ollama. They use `OLLAMA_MODEL` when present and otherwise default to `llama3.2`.

@@ -1,6 +1,9 @@
+import re
 import pandas as pd
 import numpy as np
 import torch
+from datetime import datetime
+from pathlib import Path
 from datasets import Dataset
 from transformers import (
     DistilBertTokenizer,
@@ -13,6 +16,23 @@ from sklearn.metrics import f1_score, precision_score, recall_score
 import pickle
 
 MODEL_NAME = "distilbert-base-uncased"
+RESULTS_PATH = "TRAINING_RESULTS.md"
+
+
+def _write_results_md(path, section, metrics: dict):
+    existing = Path(path).read_text() if Path(path).exists() else "# Training Results\n"
+    header = f"## {section}"
+    block = (
+        f"\n{header}\n"
+        f"_Last trained: {datetime.now().strftime('%Y-%m-%d %H:%M')}_\n\n"
+        + "\n".join(f"- **{k}**: {v}" for k, v in metrics.items())
+        + "\n"
+    )
+    if header in existing:
+        existing = re.sub(rf"{re.escape(header)}.*?(?=\n## |\Z)", block.lstrip("\n"), existing, flags=re.DOTALL)
+    else:
+        existing = existing.rstrip("\n") + "\n" + block
+    Path(path).write_text(existing)
 
 ROUTER_TASKS = [
     "medical_response",
@@ -74,16 +94,17 @@ def train_model(train_dataset, val_dataset, num_labels):
 
     training_args = TrainingArguments(
         output_dir="./router_model",
-        num_train_epochs=3,
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=8,
+        num_train_epochs=100,
+        per_device_train_batch_size=64,
+        per_device_eval_batch_size=64,
         eval_strategy="epoch",
         save_strategy="epoch",
         logging_dir="./logs",
         report_to="none",
         load_best_model_at_end=True,
         metric_for_best_model="micro_f1",
-        greater_is_better=True
+        greater_is_better=True,
+        fp16=torch.cuda.is_available(),
     )
 
     trainer = Trainer(
@@ -173,3 +194,13 @@ if __name__ == "__main__":
     print("Confidence scores:")
     for task, score in confidence_scores.items():
         print(f"{task}: {score:.4f}")
+
+    best_metrics = trainer.state.best_metric or 0.0
+    eval_results = trainer.evaluate()
+    _write_results_md(RESULTS_PATH, "Router", {
+        "Epochs": 100,
+        "Micro F1": f"{eval_results.get('eval_micro_f1', best_metrics):.4f}",
+        "Macro F1": f"{eval_results.get('eval_macro_f1', 0):.4f}",
+        "Precision": f"{eval_results.get('eval_micro_precision', 0):.4f}",
+        "Recall": f"{eval_results.get('eval_micro_recall', 0):.4f}",
+    })

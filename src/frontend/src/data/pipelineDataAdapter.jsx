@@ -26,9 +26,13 @@ const EMPTY_PIPELINE_DATA = {
     timeline: [],
   },
   verifier: {
-    valid: false,
+    valid: null,
+    status: 'indeterminate',
     rule: false,
-    gemini: false,
+    gemini: null,
+    gemini_available: false,
+    gemini_error_type: null,
+    retry_after_seconds: null,
     reason: '',
   },
   state: {
@@ -369,9 +373,15 @@ export function normalizePipelineData(rawData) {
       timeline: asArray(executor.timeline),
     },
     verifier: {
-      valid: Boolean(verifier.valid),
+      valid: typeof verifier.valid === 'boolean' ? verifier.valid : null,
+      status: typeof verifier.status === 'string' ? verifier.status : 'indeterminate',
       rule: Boolean(verifier.rule),
-      gemini: Boolean(verifier.gemini),
+      gemini: typeof verifier.gemini === 'boolean' ? verifier.gemini : null,
+      gemini_available: verifier.gemini_available !== false,
+      gemini_error_type:
+        typeof verifier.gemini_error_type === 'string' ? verifier.gemini_error_type : null,
+      retry_after_seconds:
+        typeof verifier.retry_after_seconds === 'number' ? verifier.retry_after_seconds : null,
       reason: typeof verifier.reason === 'string' ? verifier.reason : '',
     },
     state: {
@@ -760,9 +770,15 @@ export function buildPipelineSections(rawData) {
       overview: (
         <p>
           The verifier reviewed the executed plan and returned an overall{' '}
-          {data.verifier.valid ? 'valid' : 'invalid'} outcome. The rule check{' '}
+          {data.verifier.status || (data.verifier.valid === null ? 'indeterminate' : data.verifier.valid ? 'valid' : 'invalid')}{' '}
+          outcome. The rule check{' '}
           {data.verifier.rule ? 'passed' : 'failed'}, the model-based validation{' '}
-          {data.verifier.gemini ? 'passed' : 'failed'}, and the main explanation was:{' '}
+          {data.verifier.gemini_available
+            ? data.verifier.gemini
+              ? 'passed'
+              : 'failed'
+            : 'was unavailable'}
+          , and the main explanation was:{' '}
           {data.verifier.reason || 'No verifier explanation was returned.'}
         </p>
       ),
@@ -774,13 +790,39 @@ export function buildPipelineSections(rawData) {
           equation="valid = rule_check(S*) ∧ model_validate(trace, S*)"
           steps={[
             { label: 'Rule checker', value: data.verifier.rule ? 'passed' : 'failed' },
-            { label: 'Model verifier', value: data.verifier.gemini ? 'passed' : 'failed' },
-            { label: 'Final verdict', value: data.verifier.valid ? 'valid response state' : 'invalid response state' },
+            {
+              label: 'Model verifier',
+              value: data.verifier.gemini_available
+                ? data.verifier.gemini
+                  ? 'passed'
+                  : 'failed'
+                : 'unavailable',
+            },
+            {
+              label: 'Final verdict',
+              value:
+                data.verifier.valid === null
+                  ? 'indeterminate response state'
+                  : data.verifier.valid
+                    ? 'valid response state'
+                    : 'invalid response state',
+            },
           ]}
           metrics={[
             { label: 'rule', value: data.verifier.rule ? 'true' : 'false' },
-            { label: 'gemini', value: data.verifier.gemini ? 'true' : 'false' },
-            { label: 'valid', value: data.verifier.valid ? 'true' : 'false' },
+            {
+              label: 'gemini',
+              value: data.verifier.gemini_available
+                ? data.verifier.gemini
+                  ? 'true'
+                  : 'false'
+                : 'unavailable',
+            },
+            {
+              label: 'valid',
+              value:
+                data.verifier.valid === null ? 'unknown' : data.verifier.valid ? 'true' : 'false',
+            },
           ]}
         />
       ),

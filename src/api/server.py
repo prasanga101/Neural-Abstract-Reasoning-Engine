@@ -5,6 +5,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from time import perf_counter
 
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -38,8 +41,8 @@ REQUIRED_PLANNER_FILES = [
     "tokenizer_config.json",
     "vocab.txt",
 ]
-REQUIRED_VERIFIER_ENV_VARS = ["GEMINI_API_KEY"]
-REQUIRED_EXECUTOR_ENV_VARS = ["GEMINI_API_KEY", "GEOAPIFY_API_KEY"]
+REQUIRED_VERIFIER_ENV_VARS = []
+REQUIRED_EXECUTOR_ENV_VARS = ["GEOAPIFY_API_KEY"]
 DEFAULT_TEST_PROMPT = (
     "A major earthquake has struck Pokhara, Nepal. Thousands of people have been "
     "displaced, critical injuries are being reported across multiple areas, and "

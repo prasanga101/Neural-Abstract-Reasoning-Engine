@@ -1,6 +1,9 @@
 import os
+import re
 import json
 import pickle
+from datetime import datetime
+from pathlib import Path
 
 import torch
 import torch.nn as nn
@@ -14,6 +17,23 @@ from src.planner.transformer_planner import TransformerPlanner
 MODEL_NAME = "distilbert-base-uncased"
 DATA_PATH = "data/planner/processed/planner_multilabel_dataset.json"
 SAVE_DIR = "planner_model"
+RESULTS_PATH = "TRAINING_RESULTS.md"
+
+
+def _write_results_md(path, section, metrics: dict):
+    existing = Path(path).read_text() if Path(path).exists() else "# Training Results\n"
+    header = f"## {section}"
+    block = (
+        f"\n{header}\n"
+        f"_Last trained: {datetime.now().strftime('%Y-%m-%d %H:%M')}_\n\n"
+        + "\n".join(f"- **{k}**: {v}" for k, v in metrics.items())
+        + "\n"
+    )
+    if header in existing:
+        existing = re.sub(rf"{re.escape(header)}.*?(?=\n## |\Z)", block.lstrip("\n"), existing, flags=re.DOTALL)
+    else:
+        existing = existing.rstrip("\n") + "\n" + block
+    Path(path).write_text(existing)
 
 
 class PlannerDataset(Dataset):
@@ -140,7 +160,7 @@ def train():
     tokenizer = DistilBertTokenizer.from_pretrained(MODEL_NAME)
 
     max_input_len = 96
-    batch_size = 8
+    batch_size = 64
     num_epochs = 8
     lr = 1e-4
 
@@ -240,6 +260,11 @@ def train():
         )
 
     print(f"Planner model saved to {SAVE_DIR}")
+
+    _write_results_md(RESULTS_PATH, "Planner", {
+        "Epochs": num_epochs,
+        "Best Micro F1": f"{best_micro_f1:.4f}",
+    })
 
 
 if __name__ == "__main__":

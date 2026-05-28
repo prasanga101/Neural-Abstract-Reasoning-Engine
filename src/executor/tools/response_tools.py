@@ -1,40 +1,63 @@
 from src.executor.base_tools import BaseTool
-from src.executor.LLMdef.model import GeminiClient
-from src.executor.geo_utils import geocode_location
-import math
+from src.executor.LLMdef.model import OllamaClient
 import requests
 import os
-from pathlib import Path
 from dotenv import load_dotenv
+load_dotenv()
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-load_dotenv(REPO_ROOT / ".env")
+KNOWN_HOSPITALS = [
+    {"name": "Manipal Teaching Hospital", "lat": 28.2377, "lon": 83.9956, "city": "pokhara"},
+    {"name": "Gandaki Medical College Teaching Hospital", "lat": 28.2096, "lon": 83.9856, "city": "pokhara"},
+    {"name": "Western Regional Hospital", "lat": 28.2184, "lon": 83.9938, "city": "pokhara"},
+    {"name": "Charak Memorial Hospital", "lat": 28.2097, "lon": 83.9859, "city": "pokhara"},
+    {"name": "Bir Hospital", "lat": 27.7046, "lon": 85.3131, "city": "kathmandu"},
+    {"name": "Tribhuvan University Teaching Hospital", "lat": 27.7365, "lon": 85.3302, "city": "kathmandu"},
+    {"name": "Patan Hospital", "lat": 27.6687, "lon": 85.3206, "city": "lalitpur"},
+]
+
+KNOWN_LOCATIONS = {
+    "pokhara": (28.2096, 83.9856),
+    "kathmandu": (27.7172, 85.3240),
+    "lalitpur": (27.6588, 85.3247),
+    "bhaktapur": (27.6710, 85.4298),
+    "nepal": (28.2096, 83.9856),
+}
+
 
 class HospitalDispatchTool(BaseTool):
     def __init__(self):
         super().__init__(name="identify_nearest_hospitals")
         self.geoapify_api_key = os.getenv("GEOAPIFY_API_KEY")
+        self.client = OllamaClient()
 
     def run(self, context: dict, env):
         event_context = env.get_state("event_context") or {}
         location = event_context.get("location", "Kathmandu")
-
         if not isinstance(location, str) or not location.strip():
             location = "Kathmandu"
-
         location = location.strip()
 
-        hospital_list = []
+        hospital_list = (
+            self._fetch_from_api(location)
+            or self._fetch_from_known_locations(location)
+            or self._fetch_from_llm(location)
+        )
 
+        env.update_state("available_hospitals", hospital_list)
+        env.update_state("nearby_hospitals", hospital_list)
+        return {
+            "nearby_hospitals": hospital_list,
+            "available_hospitals": hospital_list,
+        }
+
+    def _fetch_from_api(self, location: str) -> list:
         try:
             if not self.geoapify_api_key:
-                raise ValueError("GEOAPIFY_API_KEY is not set")
+                return []
 
-            resolved_location = geocode_location(location, self.geoapify_api_key)
-
-            if not resolved_location:
-                env.update_state("nearby_hospitals", [])
-                return {"nearby_hospitals": []}
+            lat, lon = self._geocode_location(location)
+            if lat is None or lon is None:
+                return []
 
             lat = resolved_location["latitude"]
             lon = resolved_location["longitude"]
@@ -50,153 +73,61 @@ class HospitalDispatchTool(BaseTool):
             url = (
                 "https://api.geoapify.com/v2/places"
                 f"?categories=healthcare.hospital"
-                f"&filter=circle:{lon},{lat},12000"
-                f"&bias=proximity:{lon},{lat}"
-                f"&limit=50"
+                f"&filter=circle:{lon},{lat},15000"
+                f"&limit=5"
                 f"&apiKey={self.geoapify_api_key}"
             )
-
             response = requests.get(url, timeout=10)
             response.raise_for_status()
-            data = response.json()
 
-            features = data.get("features", [])
-
-            candidates = []
-            fallback_candidates = []
-
-            for feature in features:
+            hospitals = []
+            for feature in response.json().get("features", []):
                 props = feature.get("properties", {})
-                geometry = feature.get("geometry", {})
-                coords = geometry.get("coordinates", [])
-
-                name = (
-                    props.get("name")
-                    or props.get("formatted")
-                    or ""
-                ).strip()
-
+                coords = feature.get("geometry", {}).get("coordinates", [])
+                name = (props.get("name") or props.get("formatted") or "").strip()
                 if not name or len(coords) < 2:
                     continue
+                hospitals.append({"name": name, "lat": coords[1], "lon": coords[0]})
 
-                candidate = {
-                    "name": name,
-                    "lat": coords[1],
-                    "lon": coords[0],
-                    "distance_m": props.get("distance") or self._distance_m(
-                        lat, lon, coords[1], coords[0]
-                    ),
-                    "categories": props.get("categories", []),
-                    "address": props.get("formatted"),
-                }
-
-                score = self._hospital_quality_score(candidate)
-                candidate["confidence"] = score
-
-                if score >= 2:
-                    candidates.append(candidate)
-                elif score >= 0:
-                    fallback_candidates.append(candidate)
-
-            ranked = sorted(
-                candidates or fallback_candidates,
-                key=lambda item: (-item["confidence"], item["distance_m"])
-            )
-
-            if len(candidates) < 3:
-                ranked = self._merge_hospital_candidates(
-                    ranked,
-                    self._fetch_osm_hospitals(lat, lon)
-                )
-
-            hospital_list = [
-                {
-                    "name": item["name"],
-                    "lat": item["lat"],
-                    "lon": item["lon"],
-                    "distance_m": round(item["distance_m"], 1),
-                    "confidence": item["confidence"],
-                    "categories": item["categories"],
-                    "address": item["address"],
-                }
-                for item in ranked[:5]
-            ]
+            return hospitals
 
         except Exception as e:
-            print(f"[HospitalDispatchTool ERROR] {e}")
-            hospital_list = []
+            print(f"[HospitalDispatchTool API ERROR] {e}")
+            return []
 
-        env.update_state("nearby_hospitals", hospital_list)
-        return {"nearby_hospitals": hospital_list}
+    def _fetch_from_llm(self, location: str) -> list:
+        try:
+            prompt = f"""You are a disaster response expert.
 
-    def _hospital_quality_score(self, candidate):
-        name = candidate["name"].casefold()
-        categories = " ".join(candidate.get("categories") or []).casefold()
-        text = f"{name} {categories}"
+List up to 5 real hospitals or medical facilities near {location}.
 
-        reject_terms = [
-            "pharmacy",
-            "medical hall",
-            "health post",
-            "health centre",
-            "health center",
-            "basic health",
-            "clinic",
-            "polyclinic",
-            "dental",
-            "diagnostic",
-            "rehabilitation",
-            "ayurveda",
-            "मेडिकल हल",
-            "स्वास्थ्य केन्द्र",
-            "स्वास्थ्य केंद्र",
-            "क्लिनिक",
-            "फार्मेसी",
-            "दन्त",
-            "आयुर्वेद",
-        ]
-        strong_terms = [
-            "hospital",
-            "medical college",
-            "teaching hospital",
-            "trauma",
-            "emergency",
-            "अस्पताल",
-        ]
-
-        if any(term in text for term in reject_terms):
-            return -3
-
-        score = 0
-
-        if "healthcare.hospital" in categories:
-            score += 2
-
-        for term in strong_terms:
-            if term in text:
-                score += 3
-
-        distance_m = candidate.get("distance_m") or 0
-        if distance_m <= 3000:
-            score += 1
-        elif distance_m > 9000:
-            score -= 1
-
-        return score
-
-    def _fetch_osm_hospitals(self, lat, lon, radius_m=12000):
-        query = f"""
-[out:json][timeout:12];
-(
-  node(around:{radius_m},{lat},{lon})["amenity"="hospital"];
-  way(around:{radius_m},{lat},{lon})["amenity"="hospital"];
-  relation(around:{radius_m},{lat},{lon})["amenity"="hospital"];
-  node(around:{radius_m},{lat},{lon})["healthcare"="hospital"];
-  way(around:{radius_m},{lat},{lon})["healthcare"="hospital"];
-  relation(around:{radius_m},{lat},{lon})["healthcare"="hospital"];
-);
-out center tags;
+Return ONLY a valid JSON array (no extra text):
+[
+  {{"name": "Hospital Name", "lat": 0.0, "lon": 0.0}},
+  ...
+]
 """
+            result = self.client.generate_json(prompt)
+            if isinstance(result, list):
+                return [
+                    {
+                        "name": h.get("name", "Hospital"),
+                        "lat": float(h.get("lat", 0.0)),
+                        "lon": float(h.get("lon", 0.0)),
+                        "source": "llm",
+                    }
+                    for h in result
+                    if isinstance(h, dict) and h.get("name")
+                ]
+        except Exception as e:
+            print(f"[HospitalDispatchTool LLM ERROR] {e}")
+        return []
+
+    def _geocode_location(self, location: str):
+        normalized = location.strip().lower()
+        for key, coords in KNOWN_LOCATIONS.items():
+            if key in normalized:
+                return coords
 
         try:
             response = requests.post(
@@ -205,69 +136,47 @@ out center tags;
                 timeout=15,
             )
             response.raise_for_status()
-            elements = response.json().get("elements", [])
-        except Exception as exc:
-            print(f"[HospitalDispatchTool OSM fallback ERROR] {exc}")
+            results = response.json().get("results", [])
+            if not results:
+                return None, None
+            return results[0]["latitude"], results[0]["longitude"]
+        except Exception as e:
+            print(f"[HospitalDispatchTool Geocoding ERROR] {e}")
+            return None, None
+
+    def _fetch_from_known_locations(self, location: str) -> list:
+        lat, lon = self._geocode_location(location)
+        if lat is None or lon is None:
             return []
 
-        candidates = []
+        hospitals = []
+        for hospital in KNOWN_HOSPITALS:
+            distance_km = _haversine_km(lat, lon, hospital["lat"], hospital["lon"])
+            hospitals.append({
+                "name": hospital["name"],
+                "lat": hospital["lat"],
+                "lon": hospital["lon"],
+                "distance_km": round(distance_km, 2),
+                "source": "local_fallback",
+            })
 
-        for element in elements:
-            tags = element.get("tags", {})
-            name = (tags.get("name") or tags.get("name:en") or "").strip()
-            center = element.get("center") or {}
-            item_lat = element.get("lat") or center.get("lat")
-            item_lon = element.get("lon") or center.get("lon")
-
-            if not name or item_lat is None or item_lon is None:
-                continue
-
-            candidate = {
-                "name": name,
-                "lat": item_lat,
-                "lon": item_lon,
-                "distance_m": self._distance_m(lat, lon, item_lat, item_lon),
-                "categories": ["osm.healthcare.hospital"],
-                "address": tags.get("addr:full") or tags.get("addr:street"),
-            }
-            candidate["confidence"] = max(3, self._hospital_quality_score(candidate))
-            candidates.append(candidate)
-
-        return sorted(candidates, key=lambda item: (-item["confidence"], item["distance_m"]))
-
-    def _merge_hospital_candidates(self, primary, secondary):
-        merged = []
-        seen = set()
-
-        for item in [*primary, *secondary]:
-            key = self._hospital_key(item["name"])
-            if key in seen:
-                continue
-            seen.add(key)
-            merged.append(item)
-
-        return sorted(merged, key=lambda item: (-item["confidence"], item["distance_m"]))
-
-    def _hospital_key(self, name):
-        return " ".join(name.casefold().replace("&", "and").split())
-
-    def _distance_m(self, src_lat, src_lon, dest_lat, dest_lon):
-        radius_m = 6371000
-        phi1 = math.radians(src_lat)
-        phi2 = math.radians(dest_lat)
-        delta_phi = math.radians(dest_lat - src_lat)
-        delta_lambda = math.radians(dest_lon - src_lon)
-
-        a = (
-            math.sin(delta_phi / 2) ** 2
-            + math.cos(phi1)
-            * math.cos(phi2)
-            * math.sin(delta_lambda / 2) ** 2
-        )
-        return radius_m * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return sorted(hospitals, key=lambda hospital: hospital["distance_km"])[:5]
 
 
-class RescueTeamDeploymentTool(BaseTool):
+def _haversine_km(lat1, lon1, lat2, lon2):
+    from math import asin, cos, radians, sin, sqrt
+
+    radius_km = 6371.0
+    dlat = radians(lat2 - lat1)
+    dlon = radians(lon2 - lon1)
+    a = (
+        sin(dlat / 2) ** 2
+        + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
+    )
+    return 2 * radius_km * asin(sqrt(a))
+
+
+class DeployRescueTeamsTool(BaseTool):
     def __init__(self):
         super().__init__(name="deploy_rescue_teams")
 
@@ -427,195 +336,129 @@ class SupplySourceIdentificationTool(BaseTool):
 class InformationRetrievalTool(BaseTool):
     def __init__(self):
         super().__init__(name="retrieve_disaster_information")
-        self.client = GeminiClient()
 
     def run(self, context: dict, env):
+        # Derive from event_context already set by EventContextAnalysisTool — no LLM call needed.
         message = env.get_state("message") or ""
+        event_context = env.get_state("event_context") or {}
 
-        prompt = f"""
-You are a disaster intelligence assistant.
+        severity = event_context.get("severity", "low")
+        affected_population = (
+            "high" if severity == "high"
+            else "medium" if severity == "moderate"
+            else "low"
+        )
 
-Extract key disaster information from the message.
+        disaster_type = event_context.get("disaster_type", "unknown")
+        immediate_needs = ["medical", "shelter", "rescue"]
+        if disaster_type in ("flood", "tsunami"):
+            immediate_needs.append("water")
+        if severity == "high":
+            immediate_needs.append("food")
 
-Message:
-{message}
-
-Return ONLY valid JSON:
-{{
-  "summary": "short summary",
-  "disaster_type": "earthquake | flood | tsunami | fire | landslide | unknown",
-  "location": "string",
-  "affected_population": "low | medium | high | unknown",
-  "immediate_needs": ["medical", "shelter", "food", "water", "rescue"]
-}}
-"""
-
-        result = self.client.generate_json(prompt)
-
-        if "error" in result:
-            disaster_info = {
-                "summary": message,
-                "disaster_type": "unknown",
-                "location": "unknown",
-                "affected_population": "unknown",
-                "immediate_needs": []
-            }
-        else:
-            disaster_info = {
-                "summary": result.get("summary", message),
-                "disaster_type": result.get("disaster_type", "unknown"),
-                "location": result.get("location", "unknown"),
-                "affected_population": result.get("affected_population", "unknown"),
-                "immediate_needs": result.get("immediate_needs", [])
-            }
+        disaster_info = {
+            "summary": message[:200],
+            "disaster_type": disaster_type,
+            "location": event_context.get("location", "unknown"),
+            "affected_population": affected_population,
+            "immediate_needs": immediate_needs,
+        }
 
         env.update_state("disaster_information", disaster_info)
         return {"disaster_information": disaster_info}
-class InformationSummaryTool(BaseTool):
+class RescueTeamAllocationTool(BaseTool):
+    def __init__(self):
+        super().__init__(name="dispatch_relief_teams")
+    def run(self, context: dict, env):
+        estimated_casualties = env.get_state("estimated_casualties") or 0
+        resources = env.get_state("relief_resources_allocated") or 0
+        teams_available = env.get_state("available_rescue_teams") or 10
+        teams_needed = max(1, estimated_casualties // 50)
+        if resources > 1000:
+            teams_needed += 2
+        max_dispatch_limit = max(1, int(teams_available * 0.6))
+        teams_dispatched = min(teams_needed, max_dispatch_limit, teams_available)
+        remaining = teams_available - teams_dispatched
+        env.update_state("available_rescue_teams", remaining)
+        return {
+            "relief_teams_dispatched": teams_dispatched,
+            "teams_remaining": remaining,
+            "teams_needed": teams_needed,
+            "dispatch_limit": max_dispatch_limit,
+        }
+
+
+class LocateTrappedVictimsTool(BaseTool):
+    def __init__(self):
+        super().__init__(name="locate_trapped_victims")
+
+    def run(self, context: dict, env):
+        estimated_casualties = env.get_state("estimated_casualties") or 0
+        event_context = env.get_state("event_context") or {}
+        severity = event_context.get("severity", "low")
+        location = event_context.get("location", "unknown")
+
+        trapped_count = max(1, estimated_casualties // 10)
+        result = {
+            "count": trapped_count,
+            "locations": [f"{location} affected zone"],
+            "severity": severity,
+        }
+        env.update_state("trapped_victims", result)
+        return {"trapped_victims": result}
+
+
+class GenerateInformationSummaryTool(BaseTool):
     def __init__(self):
         super().__init__(name="generate_information_summary")
 
     def run(self, context: dict, env):
-        event_context = env.get_state("event_context") or {}
-        disaster_information = env.get_state("disaster_information") or {}
-        situation_report = env.get_state("situation_report") or {}
-        population_demands = env.get_state("population_demands") or {}
-        optimized_route = env.get_state("optimized_route") or {}
-        hospitals = env.get_state("nearby_hospitals") or []
-
-        summary = {
-            "headline": disaster_information.get("summary") or env.get_state("message"),
-            "location": event_context.get("location") or disaster_information.get("location"),
-            "disaster_type": event_context.get("disaster_type") or disaster_information.get("disaster_type"),
-            "severity": event_context.get("severity", "unknown"),
-            "risk_level": situation_report.get("risk_level", "unknown"),
-            "affected_population": population_demands.get("estimated_affected_population"),
-            "top_hospital": optimized_route.get("hospital") or (hospitals[0].get("name") if hospitals else None),
-            "best_route": {
-                "distance_km": optimized_route.get("distance_km"),
-                "duration_min": optimized_route.get("duration_min"),
-            } if optimized_route else None,
-            "immediate_needs": disaster_information.get("immediate_needs", []),
+        disaster_info = env.get_state("disaster_information") or {}
+        result = {
+            "summary": disaster_info.get("summary", ""),
+            "disaster_type": disaster_info.get("disaster_type", "unknown"),
+            "location": disaster_info.get("location", "unknown"),
+            "affected_population": disaster_info.get("affected_population", "unknown"),
+            "immediate_needs": disaster_info.get("immediate_needs", []),
         }
+        env.update_state("information_summary", result)
+        return {"information_summary": result}
 
-        env.update_state("information_summary", summary)
-        return {"information_summary": summary}
 
-
-class PublicReportUpdateTool(BaseTool):
+class UpdatePublicReportsTool(BaseTool):
     def __init__(self):
         super().__init__(name="update_public_reports")
 
     def run(self, context: dict, env):
-        summary = env.get_state("information_summary") or {}
-        blocked_routes = env.get_state("blocked_routes") or []
-        shelters = env.get_state("available_shelters")
-        ambulances = env.get_state("available_ambulances")
+        from datetime import datetime, timezone
+        info_summary = env.get_state("information_summary") or {}
+        location = info_summary.get("location", "Unknown Location")
+        disaster_type = info_summary.get("disaster_type", "emergency")
 
-        public_report = {
+        result = {
+            "title": f"{disaster_type.title()} Emergency — {location}",
+            "issued_at": datetime.now(timezone.utc).isoformat(),
             "status": "active",
-            "location": summary.get("location"),
-            "message": self._compose_public_message(summary, blocked_routes),
-            "public_guidance": [
-                "Avoid damaged buildings and blocked corridors.",
-                "Prioritize emergency medical transport for critical injuries.",
-                "Use verified shelters and official route updates.",
-            ],
-            "resource_snapshot": {
-                "ambulances_available": ambulances,
-                "shelters_available": shelters,
-                "blocked_routes": blocked_routes,
-            },
+            "advice": "Follow emergency services instructions. Avoid affected areas.",
+            "contact": "Emergency: 100",
         }
-
-        env.update_state("public_report", public_report)
-        return {"public_report": public_report}
-
-    def _compose_public_message(self, summary, blocked_routes):
-        location = summary.get("location") or "the affected area"
-        disaster_type = summary.get("disaster_type") or "disaster"
-        severity = summary.get("severity") or "unknown"
-        hospital = summary.get("top_hospital")
-
-        message = f"{severity.title()} {disaster_type} response is active in {location}."
-
-        if hospital:
-            message += f" Priority medical routing is currently directed toward {hospital}."
-
-        if blocked_routes:
-            message += f" Blocked corridors reported: {', '.join(blocked_routes)}."
-
-        return message
+        env.update_state("public_report", result)
+        return {"public_report": result}
 
 
-class HospitalCapacityCoordinationTool(BaseTool):
+class CoordinateHospitalCapacityTool(BaseTool):
     def __init__(self):
         super().__init__(name="coordinate_hospital_capacity")
 
     def run(self, context: dict, env):
-        hospitals = env.get_state("nearby_hospitals") or []
-        injury_severity = env.get_state("injury_severity") or "unknown"
-        estimated_casualties = env.get_state("estimated_casualties") or 0
-
-        if not hospitals:
-            capacity_plan = {
-                "status": "no_hospitals_available",
-                "assignments": [],
-                "overflow_required": estimated_casualties > 0,
-            }
-            env.update_state("hospital_capacity_plan", capacity_plan)
-            return {"hospital_capacity_plan": capacity_plan}
-
-        critical_share = 0.35 if injury_severity == "critical" else 0.15
-        critical_patients = int(estimated_casualties * critical_share)
-        remaining_patients = max(0, estimated_casualties - critical_patients)
-        assignments = []
-
-        for index, hospital in enumerate(hospitals):
-            base_capacity = max(10, 45 - index * 5)
-            critical_capacity = max(2, int(base_capacity * 0.25))
-            assigned_critical = min(critical_patients, critical_capacity)
-            critical_patients -= assigned_critical
-            assigned_general = min(remaining_patients, base_capacity - assigned_critical)
-            remaining_patients -= assigned_general
-
-            assignments.append({
-                "hospital": hospital.get("name"),
-                "distance_m": hospital.get("distance_m"),
-                "estimated_capacity": base_capacity,
-                "critical_patients": assigned_critical,
-                "general_patients": assigned_general,
-                "status": "receiving" if assigned_critical or assigned_general else "standby",
-            })
-
-        capacity_plan = {
-            "status": "overflow_required" if critical_patients or remaining_patients else "balanced",
-            "assignments": assignments,
-            "unassigned_critical": critical_patients,
-            "unassigned_general": remaining_patients,
+        hospitals = env.get_state("nearby_hospitals") or env.get_state("available_hospitals") or []
+        capacity_list = [
+            {"name": h.get("name", "Hospital"), "available_beds": 30, "icu_beds": 5}
+            for h in hospitals[:3]
+        ]
+        result = {
+            "hospitals": capacity_list,
+            "overflow_plan": "Redirect to next available hospital if occupancy exceeds 80%",
         }
-
-        env.update_state("hospital_capacity_plan", capacity_plan)
-        return {"hospital_capacity_plan": capacity_plan}
-
-
-class ReliefTeamDispatchTool(BaseTool):
-    def __init__(self):
-        super().__init__(name="dispatch_relief_teams")
-    def run(self,context:dict,env):
-        estimated_casualties=env.get_state("estimated_casualties")or 0
-        resources=env.get_state("relief_resources_allocated")or 0
-        teams_available=env.get_state("available_rescue_teams")or 10
-        teams_needed=max(1,estimated_casualties//50)
-        if resources>1000:
-            teams_needed+=2
-        max_dispatch_limit=max(1,int(teams_available*0.6))
-        teams_dispatched=min(teams_needed,max_dispatch_limit,teams_available)
-        remaining=teams_available-teams_dispatched
-        env.update_state("available_rescue_teams",remaining)
-        return{
-            "relief_teams_dispatched":teams_dispatched,
-            "teams_remaining":remaining,
-            "teams_needed":teams_needed,
-            "dispatch_limit":max_dispatch_limit
-        }
+        env.update_state("hospital_capacity_plan", result)
+        return {"hospital_capacity_plan": result}

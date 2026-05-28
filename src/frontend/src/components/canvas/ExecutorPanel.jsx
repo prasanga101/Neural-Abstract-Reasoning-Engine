@@ -1,35 +1,34 @@
-const statusColor = {
-  completed: 'bg-emerald-500',
-  skipped: 'bg-amber-400',
-  failed: 'bg-rose-500',
+function tokenizeMessage(message) {
+  return message
+    .split(/[,.]/)
+    .map((token) => token.trim())
+    .filter(Boolean)
 }
 
-export function ExecutorPanel({ executor }) {
+export function EmergencyContextPanel({ message }) {
+  const chunks = tokenizeMessage(message)
+
   return (
     <div className="space-y-2.5">
-      <div className="text-[11px] text-slate-500">
-        Execution status: {' '}
-        <span className="font-semibold capitalize text-slate-800">
-          {executor.status}
-        </span>
-      </div>
-      <ol className="space-y-1">
-        {executor.timeline.slice(0, 5).map((item) => (
-          <li
-            key={`${item.step}-${item.node}`}
-            className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white/65 px-2.5 py-1.5 text-[11px]"
+      <p className="text-[11px] text-slate-500">
+        Context encoding stream
+      </p>
+      <div className="space-y-1.5">
+        {chunks.map((chunk, index) => (
+          <div
+            key={`${chunk}-${index}`}
+            className="group relative overflow-hidden rounded-xl border border-cyan-100/80 bg-white/75 px-2.5 py-1.5 text-[11px] text-slate-700"
           >
-            <div>
-              <span className="mr-1 text-slate-400">#{item.step}</span>
-              <span className="text-slate-600">{item.node}</span>
+            <span className="absolute inset-y-0 left-0 w-1 rounded-l-xl bg-gradient-to-b from-cyan-300/80 to-blue-300/80" />
+            <div className="pl-2">
+              <span className="mr-2 font-semibold uppercase tracking-[0.08em] text-cyan-600/90">
+                c{index + 1}
+              </span>
+              <span className="text-slate-600">{chunk}</span>
             </div>
-            <span
-              className={`inline-block h-2.5 w-2.5 rounded-full ${statusColor[item.status] || 'bg-slate-400'}`}
-              title={item.status}
-            />
-          </li>
+          </div>
         ))}
-      </ol>
+      </div>
     </div>
   )
 }
