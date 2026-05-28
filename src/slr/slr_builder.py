@@ -96,10 +96,21 @@ class SLRBuilder:
 
         augmented = set(predicted_nodes)
 
+        # Always include core situational awareness nodes for any disaster
+        augmented.update({
+            "scan_disaster_zone",
+            "assess_infrastructure_damage",
+            "generate_information_summary",
+            "update_public_reports",
+            "coordinate_hospital_capacity",
+        })
+
         if any(keyword in text for keyword in ("medical", "hospital", "injury", "casualt", "ambulance")):
             augmented.update({
                 "identify_nearest_hospitals",
                 "dispatch_ambulances",
+                "locate_trapped_victims",
+                "deploy_rescue_teams",
             })
 
         if any(keyword in text for keyword in ("route", "routing", "transport", "corridor", "blocked", "access")):
@@ -111,6 +122,12 @@ class SLRBuilder:
 
         if any(keyword in text for keyword in ("shelter", "evac", "displace", "temporary shelter")):
             augmented.add("allocate_temporary_shelters")
+
+        if any(keyword in text for keyword in ("earthquake", "flood", "tsunami", "fire", "disaster", "emergency", "rescue", "trapped", "victim")):
+            augmented.update({
+                "locate_trapped_victims",
+                "deploy_rescue_teams",
+            })
 
         return list(augmented)
 

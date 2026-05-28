@@ -27,6 +27,7 @@ router_model/
 *.pt
 *.pkl
 *.safetensors
+
 *.bin
 
 # Data

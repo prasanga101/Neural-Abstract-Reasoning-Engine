@@ -17,3 +17,169 @@ body {
 #root {
   min-height: 100vh;
 }
+
+.formula-flow {
+  display: grid;
+  gap: 12px;
+}
+
+.formula-flow__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.formula-flow__header p {
+  margin: 0;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.formula-flow__pulse {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--formula-accent);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--formula-accent) 30%, transparent);
+  animation: formula-pulse 1.5s ease-out infinite;
+}
+
+.formula-flow__equation {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--formula-accent) 24%, #e2e8f0);
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--formula-accent) 10%, #ffffff), #ffffff),
+    #ffffff;
+  color: #0f172a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
+  padding: 12px 14px;
+}
+
+.formula-flow__equation::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 36%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  transform: translateX(-120%);
+  animation: formula-scan 2.4s ease-in-out infinite;
+}
+
+.formula-flow__steps {
+  display: grid;
+  gap: 8px;
+}
+
+.formula-flow__step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid #e8edf3;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.76);
+  padding: 9px 10px;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: formula-step-in 420ms ease forwards;
+}
+
+.formula-flow__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--formula-accent) 13%, #ffffff);
+  color: var(--formula-accent);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.formula-flow__step p {
+  margin: 0;
+  color: #1e293b;
+  font-size: 12.5px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.formula-flow__step span:not(.formula-flow__index) {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.formula-flow__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+}
+
+.formula-flow__metric {
+  min-width: 0;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e8edf3;
+  padding: 8px 9px;
+}
+
+.formula-flow__metric span {
+  display: block;
+  color: #94a3b8;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.formula-flow__metric strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--formula-accent);
+  font-size: 12px;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes formula-step-in {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes formula-pulse {
+  70% {
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--formula-accent) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--formula-accent) 0%, transparent);
+  }
+}
+
+@keyframes formula-scan {
+  0% {
+    transform: translateX(-130%);
+  }
+  55%,
+  100% {
+    transform: translateX(330%);
+  }
+}

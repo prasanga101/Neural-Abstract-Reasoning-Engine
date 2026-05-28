@@ -165,7 +165,7 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     return 2 * radius_km * asin(sqrt(a))
 
 
-class RescueTeamAllocationTool(BaseTool):
+class DeployRescueTeamsTool(BaseTool):
     def __init__(self):
         super().__init__(name="deploy_rescue_teams")
 
@@ -240,20 +240,96 @@ class InformationRetrievalTool(BaseTool):
 class RescueTeamAllocationTool(BaseTool):
     def __init__(self):
         super().__init__(name="dispatch_relief_teams")
-    def run(self,context:dict,env):
-        estimated_casualties=env.get_state("estimated_casualties")or 0
-        resources=env.get_state("relief_resources_allocated")or 0
-        teams_available=env.get_state("available_rescue_teams")or 10
-        teams_needed=max(1,estimated_casualties//50)
-        if resources>1000:
-            teams_needed+=2
-        max_dispatch_limit=max(1,int(teams_available*0.6))
-        teams_dispatched=min(teams_needed,max_dispatch_limit,teams_available)
-        remaining=teams_available-teams_dispatched
-        env.update_state("available_rescue_teams",remaining)
-        return{
-            "relief_teams_dispatched":teams_dispatched,
-            "teams_remaining":remaining,
-            "teams_needed":teams_needed,
-            "dispatch_limit":max_dispatch_limit
+    def run(self, context: dict, env):
+        estimated_casualties = env.get_state("estimated_casualties") or 0
+        resources = env.get_state("relief_resources_allocated") or 0
+        teams_available = env.get_state("available_rescue_teams") or 10
+        teams_needed = max(1, estimated_casualties // 50)
+        if resources > 1000:
+            teams_needed += 2
+        max_dispatch_limit = max(1, int(teams_available * 0.6))
+        teams_dispatched = min(teams_needed, max_dispatch_limit, teams_available)
+        remaining = teams_available - teams_dispatched
+        env.update_state("available_rescue_teams", remaining)
+        return {
+            "relief_teams_dispatched": teams_dispatched,
+            "teams_remaining": remaining,
+            "teams_needed": teams_needed,
+            "dispatch_limit": max_dispatch_limit,
         }
+
+
+class LocateTrappedVictimsTool(BaseTool):
+    def __init__(self):
+        super().__init__(name="locate_trapped_victims")
+
+    def run(self, context: dict, env):
+        estimated_casualties = env.get_state("estimated_casualties") or 0
+        event_context = env.get_state("event_context") or {}
+        severity = event_context.get("severity", "low")
+        location = event_context.get("location", "unknown")
+
+        trapped_count = max(1, estimated_casualties // 10)
+        result = {
+            "count": trapped_count,
+            "locations": [f"{location} affected zone"],
+            "severity": severity,
+        }
+        env.update_state("trapped_victims", result)
+        return {"trapped_victims": result}
+
+
+class GenerateInformationSummaryTool(BaseTool):
+    def __init__(self):
+        super().__init__(name="generate_information_summary")
+
+    def run(self, context: dict, env):
+        disaster_info = env.get_state("disaster_information") or {}
+        result = {
+            "summary": disaster_info.get("summary", ""),
+            "disaster_type": disaster_info.get("disaster_type", "unknown"),
+            "location": disaster_info.get("location", "unknown"),
+            "affected_population": disaster_info.get("affected_population", "unknown"),
+            "immediate_needs": disaster_info.get("immediate_needs", []),
+        }
+        env.update_state("information_summary", result)
+        return {"information_summary": result}
+
+
+class UpdatePublicReportsTool(BaseTool):
+    def __init__(self):
+        super().__init__(name="update_public_reports")
+
+    def run(self, context: dict, env):
+        from datetime import datetime, timezone
+        info_summary = env.get_state("information_summary") or {}
+        location = info_summary.get("location", "Unknown Location")
+        disaster_type = info_summary.get("disaster_type", "emergency")
+
+        result = {
+            "title": f"{disaster_type.title()} Emergency — {location}",
+            "issued_at": datetime.now(timezone.utc).isoformat(),
+            "status": "active",
+            "advice": "Follow emergency services instructions. Avoid affected areas.",
+            "contact": "Emergency: 100",
+        }
+        env.update_state("public_report", result)
+        return {"public_report": result}
+
+
+class CoordinateHospitalCapacityTool(BaseTool):
+    def __init__(self):
+        super().__init__(name="coordinate_hospital_capacity")
+
+    def run(self, context: dict, env):
+        hospitals = env.get_state("nearby_hospitals") or env.get_state("available_hospitals") or []
+        capacity_list = [
+            {"name": h.get("name", "Hospital"), "available_beds": 30, "icu_beds": 5}
+            for h in hospitals[:3]
+        ]
+        result = {
+            "hospitals": capacity_list,
+            "overflow_plan": "Redirect to next available hospital if occupancy exceeds 80%",
+        }
+        env.update_state("hospital_capacity_plan", result)
+        return {"hospital_capacity_plan": result}

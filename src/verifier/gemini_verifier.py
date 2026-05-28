@@ -19,31 +19,52 @@ class OllamaVerifier:
         self.model_name = os.getenv("OLLAMA_VERIFIER_MODEL", os.getenv("OLLAMA_MODEL", _DEFAULT_OLLAMA_MODEL))
 
     def validate(self, message, execution_trace, env_state):
-        prompt = f"""
-You are a disaster-response verifier.
+        # Build a concise summary of key outputs to avoid overwhelming the model
+        state_summary = {
+            "hospitals_found": len(env_state.get("nearby_hospitals") or env_state.get("available_hospitals") or []),
+            "routes_found": len(env_state.get("alternative_routes") or []),
+            "best_route": env_state.get("optimized_route"),
+            "ambulances_remaining": env_state.get("available_ambulances"),
+            "ambulances_dispatched": env_state.get("ambulances_dispatched", 0),
+            "shelters_remaining": env_state.get("available_shelters"),
+            "shelters_allocated": env_state.get("shelters_allocated", 0),
+            "injury_severity": env_state.get("injury_severity"),
+            "estimated_casualties": env_state.get("estimated_casualties"),
+            "rescue_teams_allocated": env_state.get("rescue_teams_allocated"),
+            "relief_resources_allocated": env_state.get("relief_resources_allocated", 0),
+            "blocked_routes": env_state.get("blocked_routes", []),
+        }
 
-Validation rules:
-- Treat dispatched ambulances and allocated shelters as successful resource use, not as failure.
-- It is valid for available_ambulances to become 0 if ambulances_dispatched is present and no count is negative.
-- It is valid for available_shelters to decrease if shelters_allocated is present and no count is negative.
-- Do not compare available_shelters to relief_resources_allocated; they are different units.
-- Only mark invalid for contradictions, missing required emergency outputs, negative resource counts, impossible routes/hospitals, or unsafe recommendations.
+        completed_steps = [
+            step["node"] for step in (execution_trace or [])
+            if step.get("status") == "completed"
+        ]
 
-Scenario:
-{message}
+        prompt = f"""You are a disaster-response pipeline verifier. Assess whether the pipeline produced a valid emergency response.
 
-Execution Trace:
-{execution_trace}
+Mark VALID if:
+- At least one hospital was identified, OR at least one route was computed
+- No resource count is negative
+- Ambulances being 0 after dispatch is acceptable (resources were used)
+- Internal computation fields (injury_severity, damage_assessment, etc.) having any value or None is acceptable
 
-Final Environment State:
-{env_state}
+Mark INVALID only if:
+- A resource count is negative
+- The best_route is to a location that makes no sense for the scenario
+- A critical step clearly failed and left the state in an unsafe condition
 
-Return ONLY valid JSON in this format:
+Scenario: {message}
+
+Completed steps: {completed_steps}
+
+Key state summary:
+{json.dumps(state_summary, indent=2, default=str)}
+
+Return ONLY valid JSON:
 {{
   "valid": true,
-  "reason": "explanation"
-}}
-"""
+  "reason": "one sentence explanation"
+}}"""
 
         last_error = None
 

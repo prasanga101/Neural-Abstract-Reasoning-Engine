@@ -37,7 +37,7 @@ function formatRoute(route) {
 function DetailList({ items }) {
   return (
     <ul className="space-y-1">
-      {items.filter(Boolean).map((item) => (
+      {items.map((item) => (
         <li key={item} className="rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-700">
           {item}
         </li>
@@ -99,10 +99,6 @@ export function ReasoningCanvas({ data }) {
         bestRouteStats
           ? `best route: ${bestRoute.hospital ?? 'selected hospital'} / ${bestRouteStats}`
           : 'best route: not available'
-      const blockedRoutes = data.state.blocked_routes.filter(Boolean)
-      const blockedRoutesDetail = blockedRoutes.length
-        ? `blocked routes: ${blockedRoutes.join(', ')}`
-        : 'blocked routes: No routes are blocked'
 
       return ({
       input: {
@@ -117,9 +113,9 @@ export function ReasoningCanvas({ data }) {
           details: <DetailList items={data.message.split(/[,.]/).filter(Boolean)} />,
           math: (
             <div className="space-y-2">
-              <p>Message is split into emergency facts, preserving location, casualty, shelter, and routing signals for downstream stages.</p>
+              <p>Placeholder internals: encoding and contextual chunk scoring.</p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'chunks = split(message, /[,.!?]/)\ncontext = normalize(location + urgency + needs)\nstate_0 = { message, context }'}
+                {'embedding = f(message); chunks = split(embedding, semantic_boundaries)'}
               </code>
             </div>
           ),
@@ -138,9 +134,9 @@ export function ReasoningCanvas({ data }) {
           ),
           math: (
             <div className="space-y-2">
-              <p>Task routing combines classifier scores with emergency keywords so medical, shelter, and route work cannot be dropped from a mixed incident.</p>
+              <p>Placeholder internals: routing scores, thresholding, and top-k selection.</p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'scores = classifier(context)\ntasks = { t | score(t) >= threshold }\nif medical_terms: tasks += hospital + ambulance\nif shelter_terms: tasks += shelter_allocation\nif route_terms: tasks += route_planning'}
+                {'selected = top_k(sigmoid(W_router * context), threshold)'}
               </code>
             </div>
           ),
@@ -159,9 +155,9 @@ export function ReasoningCanvas({ data }) {
           ),
           math: (
             <div className="space-y-2">
-              <p>Planner expands routed tasks into executable nodes, then orders high-risk operations before reporting and verification.</p>
+              <p>Placeholder internals: node scoring and constrained optimization.</p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'nodes = expand(tasks)\npriority(node) = severity_weight + dependency_weight\nplan = sort(nodes, priority desc)'}
+                {'plan = argmax(score(node_i) - penalty(constraints))'}
               </code>
             </div>
           ),
@@ -181,11 +177,11 @@ export function ReasoningCanvas({ data }) {
           math: (
             <div className="space-y-2">
               <p>
-                SLR builds a dependency graph so route scans, hospital lookup, ambulance
-                dispatch, and shelter allocation run in a valid order.
+                Placeholder internals: dependency resolution and topological ordering of SLR
+                graph.
               </p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'G = (V, E)\nE includes: collect_sensor_data -> identify_alternative_routes\nE includes: identify_nearest_hospitals -> dispatch_ambulances\norder = topological_sort(G)'}
+                {'order = topo_sort(V, E); valid = acyclic(E)'}
               </code>
             </div>
           ),
@@ -204,9 +200,9 @@ export function ReasoningCanvas({ data }) {
           ),
           math: (
             <div className="space-y-2">
-              <p>Executor applies each tool result to the tracked emergency state and records completed, skipped, or failed steps in the timeline.</p>
+              <p>Placeholder internals: state transitions for completed, skipped, and failed.</p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'for node in order:\n  result = run_tool(node, state_t)\n  state_t+1 = merge(state_t, result.updates)\n  timeline += { node, status, result }'}
+                {'s_t+1 = transition(s_t, action_t, outcome_t)'}
               </code>
             </div>
           ),
@@ -228,9 +224,9 @@ export function ReasoningCanvas({ data }) {
           ),
           math: (
             <div className="space-y-2">
-              <p>Verifier fuses deterministic safety rules with the local Ollama model check; depleted but nonnegative resources are allowed after dispatch.</p>
+              <p>Placeholder internals: rule checks plus validation reasoning fusion.</p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'rule_ok = ambulances >= 0 AND shelters >= 0\nmodel_ok = ollama_validate(trace, final_state)\nvalid = rule_ok AND model_ok'}
+                {'verdict = rule_check(plan) AND model_validate(execution_trace)'}
               </code>
             </div>
           ),
@@ -246,16 +242,16 @@ export function ReasoningCanvas({ data }) {
                 `ambulances: ${data.state.ambulances}`,
                 `shelters: ${data.state.shelters}`,
                 populationDetail,
-                blockedRoutesDetail,
+                `blocked routes: ${data.state.blocked_routes.join(', ')}`,
                 bestRouteDetail,
               ]}
             />
           ),
           math: (
             <div className="space-y-2">
-              <p>Final state is derived from real tool outputs: nearby hospital candidates, Dijkstra/OSRM route costs, blocked-route scan results, and resource allocation counts.</p>
+              <p>Placeholder internals: final state derivation and confidence aggregation.</p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {`hospitals = nearest(event_coordinates, hospital_index)\nblocked_edges = scan_roads(event_coordinates)\nif blocked_edges is empty: blocked_routes = []\nbest_route = min(Dijkstra(graph, event, hospital) for hospital in hospitals)\nstate* = { hospitals, best_route, blocked_routes, ambulances, shelters }\n${bestRouteDetail}`}
+                {'state* = aggregate(executor_out, verifier_out, routing_costs)'}
               </code>
             </div>
           ),

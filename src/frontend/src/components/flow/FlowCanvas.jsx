@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PIPELINE_PHASES } from '../../data/pipelinePhases'
-import { summarizeStage } from '../../data/pipelineDataAdapter'
+import { buildPipelineSections, summarizeStage } from '../../data/pipelineDataAdapter'
 import {
   Background,
   Handle,
@@ -14,7 +14,7 @@ import {
   useReactFlow,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { buildInspectorMap, PhaseInspector } from '../canvas/PhaseInspectorModal'
+import { PhaseInspector } from '../canvas/PhaseInspectorModal'
 import { PipelineInspectorModal } from '../canvas/PipelineInspectorModal'
 
 // ─── Stage definitions ────────────────────────────────────────────────────────
@@ -345,10 +345,7 @@ function FlowCanvasInner({ data, runSignal, pipelineInspectorSignal }) {
     setTab('overview')
   }, [getViewport])
 
-  const inspectorMap = buildInspectorMap(data)
-  const sections = Object.fromEntries(
-    Object.entries(inspectorMap).map(([phaseId, phase]) => [phaseId, phase.sections])
-  )
+  const sections = buildPipelineSections(data)
 
   const activeStageName = activeIndex >= 0 && activeIndex < STAGES.length ? STAGES[activeIndex].title : null
 
@@ -400,19 +397,20 @@ function FlowCanvasInner({ data, runSignal, pipelineInspectorSignal }) {
 
       <PhaseInspector
         open={Boolean(inspector)}
-        stageAccent={selectedId ? inspectorMap[selectedId]?.accent ?? getStageById(selectedId)?.accent : '#6366f1'}
+        phaseTitle={selectedId ? getStageById(selectedId)?.title || '' : ''}
+        stageAccent={selectedId ? getStageById(selectedId)?.accent : '#6366f1'}
         activeTab={tab}
         onTabChange={setTab}
         onClose={() => setInspector(null)}
-        sections={selectedId ? inspectorMap[selectedId]?.sections : {}}
+        sections={selectedId ? sections[selectedId] : {}}
         nodeScreenX={inspector?.screenX}
         nodeScreenY={inspector?.screenY}
         nodeW={inspector?.nodeW}
         nodeH={inspector?.nodeH}
-        stageTitle={selectedId ? inspectorMap[selectedId]?.title ?? getStageById(selectedId)?.title ?? '' : ''}
-        stageAccentBg={selectedId ? inspectorMap[selectedId]?.accentBg ?? getStageById(selectedId)?.accentBg : '#eef2ff'}
-        stageGlow={selectedId ? inspectorMap[selectedId]?.glow ?? getStageById(selectedId)?.accentGlow : 'rgba(99,102,241,0.2)'}
-        stageSummary={selectedId ? inspectorMap[selectedId]?.summary ?? summarizeStage(selectedId, data) : ''}
+        stageTitle={selectedId ? getStageById(selectedId)?.title || '' : ''}
+        stageAccentBg={selectedId ? getStageById(selectedId)?.accentBg : '#eef2ff'}
+        stageGlow={selectedId ? getStageById(selectedId)?.accentGlow : 'rgba(99,102,241,0.2)'}
+        stageSummary={selectedId ? summarizeStage(selectedId, data) : ''}
       />
 
       <PipelineInspectorModal

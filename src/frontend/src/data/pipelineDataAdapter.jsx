@@ -37,9 +37,7 @@ const EMPTY_PIPELINE_DATA = {
   },
   state: {
     ambulances: 0,
-    ambulances_dispatched: 0,
     shelters: 0,
-    shelters_allocated: 0,
     hospitals: [],
     blocked_routes: [],
     blocked_route_details: [],
@@ -128,7 +126,7 @@ function formatRoute(route) {
       : typeof route.distance_m === 'number'
         ? route.distance_m / 1000
         : typeof route.distance === 'number'
-          ? route.distance
+          ? route.distance / 1000
           : null
   const durationMin =
     typeof route.duration_min === 'number'
@@ -136,7 +134,7 @@ function formatRoute(route) {
       : typeof route.duration_s === 'number'
         ? route.duration_s / 60
         : typeof route.duration === 'number'
-          ? route.duration
+          ? route.duration / 60
           : null
 
   if (typeof distanceKm === 'number') parts.push(`${roundNumber(distanceKm, 2)} km`)
@@ -270,63 +268,52 @@ function ExecutionOrder({ title = 'Execution Order', steps = [] }) {
   )
 }
 
-const mathSections = {
-  input: (
-    <div className="space-y-2">
-      <p>Message is split into emergency facts while preserving location, injury, shelter, and routing signals.</p>
-      <code className="block rounded bg-slate-100 p-2 text-xs">
-        {'chunks = split(message, /[,.!?]/)\ncontext = normalize(location + urgency + needs)\nstate_0 = { message, context }'}
-      </code>
+function FormulaFlow({
+  title,
+  equation,
+  steps = [],
+  metrics = [],
+  accent = '#6366f1',
+}) {
+  return (
+    <div className="formula-flow" style={{ '--formula-accent': accent }}>
+      <div className="formula-flow__header">
+        <span className="formula-flow__pulse" />
+        <p>{title}</p>
+      </div>
+
+      <div className="formula-flow__equation">
+        {equation}
+      </div>
+
+      <div className="formula-flow__steps">
+        {steps.map((step, index) => (
+          <div
+            className="formula-flow__step"
+            key={`${title}-${step.label}-${index}`}
+            style={{ animationDelay: `${index * 120}ms` }}
+          >
+            <span className="formula-flow__index">{index + 1}</span>
+            <div>
+              <p>{step.label}</p>
+              <span>{step.value}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {metrics.length ? (
+        <div className="formula-flow__metrics">
+          {metrics.map((metric) => (
+            <div className="formula-flow__metric" key={`${title}-${metric.label}`}>
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </div>
-  ),
-  router: (
-    <div className="space-y-2">
-      <p>Router combines classifier scores with emergency keywords so medical, shelter, and routing work stay in the plan.</p>
-      <code className="block rounded bg-slate-100 p-2 text-xs">
-        {'scores = classifier(context)\ntasks = { t | score(t) >= threshold }\nmedical_terms -> add hospital + ambulance\nroute_terms -> add blocked-route scan + route planning'}
-      </code>
-    </div>
-  ),
-  planner: (
-    <div className="space-y-2">
-      <p>Planner expands routed tasks into executable nodes and ranks urgent operational work first.</p>
-      <code className="block rounded bg-slate-100 p-2 text-xs">
-        {'nodes = expand(tasks)\npriority(node) = severity_weight + dependency_weight\nplan = sort(nodes, priority desc)'}
-      </code>
-    </div>
-  ),
-  slr: (
-    <div className="space-y-2">
-      <p>SLR resolves dependencies so hospital lookup, route planning, ambulance dispatch, and shelter allocation run in a valid order.</p>
-      <code className="block rounded bg-slate-100 p-2 text-xs">
-        {'G = (V, E)\nidentify_nearest_hospitals -> dispatch_ambulances\ncollect_sensor_data -> identify_alternative_routes\norder = topological_sort(G)'}
-      </code>
-    </div>
-  ),
-  executor: (
-    <div className="space-y-2">
-      <p>Executor merges every tool result into the tracked emergency state and records the timeline outcome.</p>
-      <code className="block rounded bg-slate-100 p-2 text-xs">
-        {'for node in order:\n  result = run_tool(node, state_t)\n  state_t+1 = merge(state_t, result.updates)\n  timeline += { node, status, result }'}
-      </code>
-    </div>
-  ),
-  verifier: (
-    <div className="space-y-2">
-      <p>Verifier combines deterministic resource rules with local Ollama validation; used resources are valid as long as counts are nonnegative.</p>
-      <code className="block rounded bg-slate-100 p-2 text-xs">
-        {'rule_ok = ambulances >= 0 AND shelters >= 0\nmodel_ok = ollama_validate(trace, final_state)\nvalid = rule_ok AND model_ok'}
-      </code>
-    </div>
-  ),
-  final: (
-    <div className="space-y-2">
-      <p>Final state is assembled from hospital candidates, Dijkstra/OSRM route costs, blocked-route scan results, and allocated resources.</p>
-      <code className="block rounded bg-slate-100 p-2 text-xs">
-        {'hospitals = nearest(event_coordinates, hospital_index)\nblocked_edges = scan_roads(event_coordinates)\nif blocked_edges is empty: blocked_routes = []\nbest_route = min(Dijkstra(graph, event, hospital) for hospital in hospitals)\nstate* = { hospitals, best_route, blocked_routes, ambulances, shelters }'}
-      </code>
-    </div>
-  ),
+  )
 }
 
 export function isPipelineVizData(value) {
@@ -387,27 +374,9 @@ export function normalizePipelineData(rawData) {
     },
     verifier: {
       valid: typeof verifier.valid === 'boolean' ? verifier.valid : null,
-      status:
-        typeof verifier.status === 'string'
-          ? verifier.status
-          : verifier.valid === null || verifier.valid === undefined
-            ? 'indeterminate'
-            : verifier.valid
-              ? 'valid'
-              : 'invalid',
+      status: typeof verifier.status === 'string' ? verifier.status : 'indeterminate',
       rule: Boolean(verifier.rule),
-      llm:
-        typeof verifier.llm === 'boolean'
-          ? verifier.llm
-          : typeof verifier.gemini === 'boolean'
-            ? verifier.gemini
-            : null,
-      gemini:
-        typeof verifier.gemini === 'boolean'
-          ? verifier.gemini
-          : typeof verifier.llm === 'boolean'
-            ? verifier.llm
-            : null,
+      gemini: typeof verifier.gemini === 'boolean' ? verifier.gemini : null,
       gemini_available: verifier.gemini_available !== false,
       gemini_error_type:
         typeof verifier.gemini_error_type === 'string' ? verifier.gemini_error_type : null,
@@ -417,10 +386,7 @@ export function normalizePipelineData(rawData) {
     },
     state: {
       ambulances: typeof state.ambulances === 'number' ? state.ambulances : 0,
-      ambulances_dispatched:
-        typeof state.ambulances_dispatched === 'number' ? state.ambulances_dispatched : 0,
       shelters: typeof state.shelters === 'number' ? state.shelters : 0,
-      shelters_allocated: typeof state.shelters_allocated === 'number' ? state.shelters_allocated : 0,
       hospitals: asArray(state.hospitals),
       blocked_routes: asArray(state.blocked_routes),
       blocked_route_details: asArray(state.blocked_route_details),
@@ -491,10 +457,7 @@ export function summarizeStage(id, rawData) {
   if (id === 'planner') return data.planner.top ? `top → ${data.planner.top}` : `${data.planner.nodes.length} nodes`
   if (id === 'slr') return `${data.slr.nodes.length} nodes · ${data.slr.edges.length} edges`
   if (id === 'executor') return `${data.executor.timeline.length} steps`
-  if (id === 'verifier') {
-    if (data.verifier.valid === null) return 'indeterminate'
-    return data.verifier.valid ? 'passed ✓' : 'failed ✗'
-  }
+  if (id === 'verifier') return data.verifier.valid ? 'passed ✓' : 'failed ✗'
   return `${data.state.routes.length} routes`
 }
 
@@ -504,6 +467,13 @@ export function buildPipelineSections(rawData) {
   const skippedSteps = data.executor.timeline.filter((step) => step.status === 'skipped').length
   const failedSteps = data.executor.timeline.filter((step) => step.status === 'failed').length
   const bestRoute = formatRoute(data.state.best_route)
+  const bestRouteHospital = data.state.best_route?.hospital
+  const topRouterScore = data.router.scores.find((entry) => entry.task === data.router.top)?.score
+  const topPlannerScore = data.planner.scores.find((entry) => entry.node === data.planner.top)?.score
+  const rasterPopulation = data.state.raster_population ?? data.state.population_demands
+  const rasterRadius = rasterPopulation?.radius_km
+  const rasterSource = rasterPopulation?.source ?? 'unknown'
+  const bestRouteDistance = bestRoute ?? 'no route selected'
   const plannerPreview = quotedList(data.planner.nodes.slice(0, 3))
   const topSlrOrder = quotedList(data.slr.order.slice(0, 4))
   const topHospitals = quotedList(
@@ -514,6 +484,7 @@ export function buildPipelineSections(rawData) {
   const topTimelineNodes = quotedList(
     data.executor.timeline.map((step) => step?.node).filter(Boolean).slice(0, 4)
   )
+  const rlClassifierTasks = quotedList(data.router.rl.classifier_tasks.slice(0, 3))
   const routerPriorityOrder = data.router.scores.length
     ? data.router.scores.map((entry) => entry.task)
     : data.router.tasks
@@ -572,36 +543,31 @@ export function buildPipelineSections(rawData) {
     }
 
     if (mentionsMedical) {
-      if (data.state.ambulances_dispatched) {
-        finalStateSentences.push(
-          `${data.state.ambulances_dispatched} ambulance${
-            data.state.ambulances_dispatched === 1 ? '' : 's'
-          } were dispatched; ${data.state.ambulances} remain available.`
-        )
-      } else {
-        finalStateSentences.push(
-          `${data.state.ambulances} ambulance${
-            data.state.ambulances === 1 ? '' : 's'
-          } remain available in the tracked state after execution.`
-        )
-      }
+      finalStateSentences.push(
+        `${data.state.ambulances} ambulance${
+          data.state.ambulances === 1 ? '' : 's'
+        } remain available in the tracked state after execution.`
+      )
     }
   }
 
   if (mentionsShelter || data.state.shelters) {
-    if (data.state.shelters_allocated) {
-      finalStateSentences.push(
-        `${data.state.shelters_allocated} shelter${
-          data.state.shelters_allocated === 1 ? '' : 's'
-        } were allocated; ${data.state.shelters} remain available.`
-      )
-    } else {
-      finalStateSentences.push(
-        `${data.state.shelters} shelter${
-          data.state.shelters === 1 ? '' : 's'
-        } remain represented in the current response snapshot.`
-      )
-    }
+    finalStateSentences.push(
+      `${data.state.shelters} shelter${
+        data.state.shelters === 1 ? '' : 's'
+      } remain represented in the current response snapshot.`
+    )
+  }
+
+  if (data.state.population_demands) {
+    const { demand_level, source } = data.state.population_demands
+    const pop = data.state.estimated_affected_population
+    finalStateSentences.push(
+      data.state.population_summary ??
+        `Population demand estimated as ${demand_level}${
+          pop ? ` with approximately ${pop.toLocaleString()} people affected` : ''
+        } (source: ${source}).`
+    )
   }
 
   if (mentionsRouting || data.state.routes.length || data.state.blocked_routes.length) {
@@ -609,7 +575,11 @@ export function buildPipelineSections(rawData) {
       finalStateSentences.push(
         `${data.state.routes.length} route option${
           data.state.routes.length === 1 ? '' : 's'
-        } were produced${bestRoute ? `, with a best route of ${bestRoute}` : ''}.`
+        } were produced${
+          bestRoute
+            ? `; best route is to ${bestRouteHospital ? `"${bestRouteHospital}"` : 'the selected hospital'} at ${bestRoute}`
+            : ''
+        }.`
       )
     } else if (mentionsRouting) {
       finalStateSentences.push(
@@ -618,12 +588,13 @@ export function buildPipelineSections(rawData) {
     }
 
     if (data.state.blocked_routes.length) {
+      const detection = data.state.blocked_route_detection
+      const sourceText = detection?.source ? ` from ${detection.source}` : ''
+      const simulatedText = detection?.simulated ? ' as risk-based candidates' : ''
       finalStateSentences.push(
-        `Blocked corridors were identified${topBlockedRoutes ? `, including ${topBlockedRoutes}` : ''}.`
-      )
-    } else if (mentionsRouting || data.state.routes.length) {
-      finalStateSentences.push(
-        data.state.blocked_route_detection?.message || 'No routes are blocked in the current response snapshot.'
+        `Blocked corridors were identified${sourceText}${simulatedText}${
+          topBlockedRoutes ? `, including ${topBlockedRoutes}` : ''
+        }.`
       )
     }
   }
@@ -644,7 +615,22 @@ export function buildPipelineSections(rawData) {
         </p>
       ),
       details: <JsonBlock value={{ message: data.message }} />,
-      math: mathSections.input,
+      math: (
+        <FormulaFlow
+          title="Context Encoding"
+          accent="#0ea5e9"
+          equation="h₀ = encode(split(message))"
+          steps={[
+            { label: 'Tokenize report', value: `${chunkCount(data.message)} semantic chunk${chunkCount(data.message) === 1 ? '' : 's'}` },
+            { label: 'Keep location signal', value: data.state.resolved_location?.query ?? 'location inferred downstream' },
+            { label: 'Seed pipeline state', value: 'message → router context vector' },
+          ]}
+          metrics={[
+            { label: 'characters', value: data.message.length },
+            { label: 'chunks', value: chunkCount(data.message) },
+          ]}
+        />
+      ),
     },
     router: {
       overview: (
@@ -663,7 +649,23 @@ export function buildPipelineSections(rawData) {
         </div>
       ),
       details: <JsonBlock value={data.router} />,
-      math: mathSections.router,
+      math: (
+        <FormulaFlow
+          title="Task Routing"
+          accent="#2563eb"
+          equation="tasks = {t | σ(Wᵣh₀ + bᵣ) ≥ τ} ∪ πᴿᴸ(h₀)"
+          steps={[
+            { label: 'Score task families', value: data.router.scores.slice(0, 3).map((row) => `${row.task}:${formatScore(row.score)}`).join(' · ') || 'no scores' },
+            { label: 'Apply threshold', value: `${data.router.tasks.length} task${data.router.tasks.length === 1 ? '' : 's'} selected` },
+            { label: 'RL adjustment', value: data.router.rl.action ? `${data.router.rl.action}${data.router.rl.injected ? ' injected' : ' aligned'}` : 'no RL action' },
+          ]}
+          metrics={[
+            { label: 'top', value: data.router.top ?? 'none' },
+            { label: 'top score', value: topRouterScore != null ? formatScore(topRouterScore) : 'n/a' },
+            { label: 'source', value: data.router.rl.source ?? 'classifier' },
+          ]}
+        />
+      ),
     },
     planner: {
       overview: (
@@ -680,7 +682,22 @@ export function buildPipelineSections(rawData) {
         </div>
       ),
       details: <JsonBlock value={data.planner} />,
-      math: mathSections.planner,
+      math: (
+        <FormulaFlow
+          title="Node Planning"
+          accent="#7c3aed"
+          equation="P(nodeᵢ) = σ(Transformer([tasks; message])ᵢ)"
+          steps={[
+            { label: 'Fuse intent and text', value: `${data.router.tasks.length} routed task signals` },
+            { label: 'Rank reasoning nodes', value: data.planner.scores.slice(0, 3).map((row) => `${row.node}:${formatScore(row.score)}`).join(' · ') || 'no node scores' },
+            { label: 'Emit plan set', value: `${data.planner.nodes.length} node${data.planner.nodes.length === 1 ? '' : 's'} selected` },
+          ]}
+          metrics={[
+            { label: 'top node', value: data.planner.top ?? 'none' },
+            { label: 'top score', value: topPlannerScore != null ? formatScore(topPlannerScore) : 'n/a' },
+          ]}
+        />
+      ),
     },
     slr: {
       overview: (
@@ -695,7 +712,23 @@ export function buildPipelineSections(rawData) {
         </div>
       ),
       details: <JsonBlock value={data.slr} />,
-      math: mathSections.slr,
+      math: (
+        <FormulaFlow
+          title="Symbolic Dependency Resolution"
+          accent="#8b5cf6"
+          equation="G = (V, E), order = topo_sort(G)"
+          steps={[
+            { label: 'Create node set', value: `|V| = ${data.slr.nodes.length}` },
+            { label: 'Attach dependency edges', value: `|E| = ${data.slr.edges.length}` },
+            { label: 'Resolve execution order', value: data.slr.order.slice(0, 4).join(' → ') || 'no order' },
+          ]}
+          metrics={[
+            { label: 'nodes', value: data.slr.nodes.length },
+            { label: 'edges', value: data.slr.edges.length },
+            { label: 'first', value: data.slr.order[0] ?? 'n/a' },
+          ]}
+        />
+      ),
     },
     executor: {
       overview: (
@@ -715,7 +748,23 @@ export function buildPipelineSections(rawData) {
         </div>
       ),
       details: <JsonBlock value={data.executor} />,
-      math: mathSections.executor,
+      math: (
+        <FormulaFlow
+          title="State Transition Execution"
+          accent="#059669"
+          equation="Sₜ₊₁ = toolₙ(Sₜ, context)"
+          steps={[
+            { label: 'Read graph order', value: `${data.executor.timeline.length} scheduled step${data.executor.timeline.length === 1 ? '' : 's'}` },
+            { label: 'Mutate environment', value: topTimelineNodes ? `recent nodes: ${topTimelineNodes}` : 'waiting for trace' },
+            { label: 'Collect trace', value: `${completedSteps} completed · ${skippedSteps} skipped · ${failedSteps} failed` },
+          ]}
+          metrics={[
+            { label: 'status', value: data.executor.status },
+            { label: 'completed', value: completedSteps },
+            { label: 'skipped', value: skippedSteps },
+          ]}
+        />
+      ),
     },
     verifier: {
       overview: (
@@ -725,7 +774,7 @@ export function buildPipelineSections(rawData) {
           outcome. The rule check{' '}
           {data.verifier.rule ? 'passed' : 'failed'}, the model-based validation{' '}
           {data.verifier.gemini_available
-            ? data.verifier.llm
+            ? data.verifier.gemini
               ? 'passed'
               : 'failed'
             : 'was unavailable'}
@@ -734,7 +783,49 @@ export function buildPipelineSections(rawData) {
         </p>
       ),
       details: <JsonBlock value={data.verifier} />,
-      math: mathSections.verifier,
+      math: (
+        <FormulaFlow
+          title="Verification Fusion"
+          accent="#e11d48"
+          equation="valid = rule_check(S*) ∧ model_validate(trace, S*)"
+          steps={[
+            { label: 'Rule checker', value: data.verifier.rule ? 'passed' : 'failed' },
+            {
+              label: 'Model verifier',
+              value: data.verifier.gemini_available
+                ? data.verifier.gemini
+                  ? 'passed'
+                  : 'failed'
+                : 'unavailable',
+            },
+            {
+              label: 'Final verdict',
+              value:
+                data.verifier.valid === null
+                  ? 'indeterminate response state'
+                  : data.verifier.valid
+                    ? 'valid response state'
+                    : 'invalid response state',
+            },
+          ]}
+          metrics={[
+            { label: 'rule', value: data.verifier.rule ? 'true' : 'false' },
+            {
+              label: 'gemini',
+              value: data.verifier.gemini_available
+                ? data.verifier.gemini
+                  ? 'true'
+                  : 'false'
+                : 'unavailable',
+            },
+            {
+              label: 'valid',
+              value:
+                data.verifier.valid === null ? 'unknown' : data.verifier.valid ? 'true' : 'false',
+            },
+          ]}
+        />
+      ),
     },
     final: {
       overview: (
@@ -747,7 +838,23 @@ export function buildPipelineSections(rawData) {
         </div>
       ),
       details: <JsonBlock value={data.state} />,
-      math: mathSections.final,
+      math: (
+        <FormulaFlow
+          title="Final State Synthesis"
+          accent="#6d28d9"
+          equation="S* = aggregate(hospitals, Dijkstra(G), Σ raster cells)"
+          steps={[
+            { label: 'Nearest hospital candidates', value: `${data.state.hospitals.length} hospital option${data.state.hospitals.length === 1 ? '' : 's'}` },
+            { label: 'Dijkstra route selection', value: bestRouteHospital ? `${bestRouteHospital} · ${bestRouteDistance}` : bestRouteDistance },
+            { label: 'Raster demand estimate', value: `${data.state.estimated_affected_population?.toLocaleString() ?? 'unknown'} affected · radius ${rasterRadius ?? 'n/a'} km` },
+          ]}
+          metrics={[
+            { label: 'best hospital', value: bestRouteHospital ?? 'n/a' },
+            { label: 'route', value: bestRouteDistance },
+            { label: 'population source', value: rasterSource },
+          ]}
+        />
+      ),
     },
   }
 }
