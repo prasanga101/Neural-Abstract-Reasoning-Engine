@@ -58,8 +58,9 @@ The API checks four categories before declaring the service ready:
 
 - Router model files in `router_model/`
 - Planner model files in `planner_model/`
-- `GEMINI_API_KEY` for verifier calls
-- `GEMINI_API_KEY` and `GEOAPIFY_API_KEY` for executor dependencies
+- `GEOAPIFY_API_KEY` for executor map/geospatial dependencies
+
+Ollama-backed components use `OLLAMA_MODEL` when present and otherwise default to `llama3.2`.
 
 If the pipeline object exists but assets are incomplete, the API returns `503` with a structured readiness report instead of silently failing.
 

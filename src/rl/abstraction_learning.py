@@ -7,6 +7,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 import numpy as np
 import pandas as pd
+import torch
+
+_SBERT_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 BANDIT_STATE_DIM = 620
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -15,7 +18,7 @@ RAW_DATA_DIR = REPO_ROOT / "data" / "raw"
 class AbstractionLearning:
     def __init__(self):
         # --- Layer 1: SBERT full (384-dim for all-MiniLM-L6-v2) ---
-        self.semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
+        self.semantic_model = SentenceTransformer("all-MiniLM-L6-v2", device=_SBERT_DEVICE)
 
         # --- Layer 2: TF-IDF weighted (200-dim via PCA) ---
         self.vectorizer = TfidfVectorizer(

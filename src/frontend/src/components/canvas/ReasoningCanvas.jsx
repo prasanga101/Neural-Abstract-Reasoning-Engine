@@ -12,10 +12,32 @@ import { PhaseInspectorModal } from './PhaseInspectorModal'
 
 const phaseOrder = ['input', 'router', 'planner', 'slr', 'executor', 'verifier', 'final']
 
+function formatRoute(route) {
+  const distanceKm =
+    typeof route?.distance_km === 'number'
+      ? route.distance_km
+      : typeof route?.distance_m === 'number'
+        ? route.distance_m / 1000
+        : typeof route?.distance === 'number'
+          ? route.distance / 1000
+          : null
+  const durationMin =
+    typeof route?.duration_min === 'number'
+      ? route.duration_min
+      : typeof route?.duration_s === 'number'
+        ? route.duration_s / 60
+        : typeof route?.duration === 'number'
+          ? route.duration / 60
+          : null
+
+  if (distanceKm == null || durationMin == null) return null
+  return `${distanceKm.toFixed(2)} km / ${durationMin.toFixed(1)} min`
+}
+
 function DetailList({ items }) {
   return (
     <ul className="space-y-1">
-      {items.map((item) => (
+      {items.filter(Boolean).map((item) => (
         <li key={item} className="rounded-md bg-slate-50 px-2 py-1 text-xs text-slate-700">
           {item}
         </li>
@@ -59,7 +81,30 @@ export function ReasoningCanvas({ data }) {
   )
 
   const inspectorMap = useMemo(
-    () => ({
+    () => {
+      const populationDemands = data.state.population_demands
+      const affectedPopulation =
+        data.state.estimated_affected_population ??
+        populationDemands?.estimated_affected_population
+      const populationDetail = populationDemands
+        ? `raster population: ${
+            affectedPopulation?.toLocaleString() ?? 'unknown'
+          } affected / ${populationDemands.demand_level ?? 'unknown'} demand / source: ${
+            populationDemands.source ?? 'unknown'
+          }`
+        : 'raster population: not available'
+      const bestRoute = data.state.best_route
+      const bestRouteStats = formatRoute(bestRoute)
+      const bestRouteDetail =
+        bestRouteStats
+          ? `best route: ${bestRoute.hospital ?? 'selected hospital'} / ${bestRouteStats}`
+          : 'best route: not available'
+      const blockedRoutes = data.state.blocked_routes.filter(Boolean)
+      const blockedRoutesDetail = blockedRoutes.length
+        ? `blocked routes: ${blockedRoutes.join(', ')}`
+        : 'blocked routes: No routes are blocked'
+
+      return ({
       input: {
         title: 'Emergency Input Context',
         sections: {
@@ -72,9 +117,9 @@ export function ReasoningCanvas({ data }) {
           details: <DetailList items={data.message.split(/[,.]/).filter(Boolean)} />,
           math: (
             <div className="space-y-2">
-              <p>Placeholder internals: encoding and contextual chunk scoring.</p>
+              <p>Message is split into emergency facts, preserving location, casualty, shelter, and routing signals for downstream stages.</p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'embedding = f(message); chunks = split(embedding, semantic_boundaries)'}
+                {'chunks = split(message, /[,.!?]/)\ncontext = normalize(location + urgency + needs)\nstate_0 = { message, context }'}
               </code>
             </div>
           ),
@@ -93,9 +138,9 @@ export function ReasoningCanvas({ data }) {
           ),
           math: (
             <div className="space-y-2">
-              <p>Placeholder internals: routing scores, thresholding, and top-k selection.</p>
+              <p>Task routing combines classifier scores with emergency keywords so medical, shelter, and route work cannot be dropped from a mixed incident.</p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'selected = top_k(sigmoid(W_router * context), threshold)'}
+                {'scores = classifier(context)\ntasks = { t | score(t) >= threshold }\nif medical_terms: tasks += hospital + ambulance\nif shelter_terms: tasks += shelter_allocation\nif route_terms: tasks += route_planning'}
               </code>
             </div>
           ),
@@ -114,9 +159,9 @@ export function ReasoningCanvas({ data }) {
           ),
           math: (
             <div className="space-y-2">
-              <p>Placeholder internals: node scoring and constrained optimization.</p>
+              <p>Planner expands routed tasks into executable nodes, then orders high-risk operations before reporting and verification.</p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'plan = argmax(score(node_i) - penalty(constraints))'}
+                {'nodes = expand(tasks)\npriority(node) = severity_weight + dependency_weight\nplan = sort(nodes, priority desc)'}
               </code>
             </div>
           ),
@@ -136,11 +181,11 @@ export function ReasoningCanvas({ data }) {
           math: (
             <div className="space-y-2">
               <p>
-                Placeholder internals: dependency resolution and topological ordering of SLR
-                graph.
+                SLR builds a dependency graph so route scans, hospital lookup, ambulance
+                dispatch, and shelter allocation run in a valid order.
               </p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'order = topo_sort(V, E); valid = acyclic(E)'}
+                {'G = (V, E)\nE includes: collect_sensor_data -> identify_alternative_routes\nE includes: identify_nearest_hospitals -> dispatch_ambulances\norder = topological_sort(G)'}
               </code>
             </div>
           ),
@@ -159,9 +204,9 @@ export function ReasoningCanvas({ data }) {
           ),
           math: (
             <div className="space-y-2">
-              <p>Placeholder internals: state transitions for completed, skipped, and failed.</p>
+              <p>Executor applies each tool result to the tracked emergency state and records completed, skipped, or failed steps in the timeline.</p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'s_t+1 = transition(s_t, action_t, outcome_t)'}
+                {'for node in order:\n  result = run_tool(node, state_t)\n  state_t+1 = merge(state_t, result.updates)\n  timeline += { node, status, result }'}
               </code>
             </div>
           ),
@@ -183,9 +228,9 @@ export function ReasoningCanvas({ data }) {
           ),
           math: (
             <div className="space-y-2">
-              <p>Placeholder internals: rule checks plus validation reasoning fusion.</p>
+              <p>Verifier fuses deterministic safety rules with the local Ollama model check; depleted but nonnegative resources are allowed after dispatch.</p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'verdict = rule_check(plan) AND model_validate(execution_trace)'}
+                {'rule_ok = ambulances >= 0 AND shelters >= 0\nmodel_ok = ollama_validate(trace, final_state)\nvalid = rule_ok AND model_ok'}
               </code>
             </div>
           ),
@@ -200,22 +245,23 @@ export function ReasoningCanvas({ data }) {
               items={[
                 `ambulances: ${data.state.ambulances}`,
                 `shelters: ${data.state.shelters}`,
-                `blocked routes: ${data.state.blocked_routes.join(', ')}`,
-                `best route: ${data.state.best_route.distance} km / ${data.state.best_route.duration} min`,
+                populationDetail,
+                blockedRoutesDetail,
+                bestRouteDetail,
               ]}
             />
           ),
           math: (
             <div className="space-y-2">
-              <p>Placeholder internals: final state derivation and confidence aggregation.</p>
+              <p>Final state is derived from real tool outputs: nearby hospital candidates, Dijkstra/OSRM route costs, blocked-route scan results, and resource allocation counts.</p>
               <code className="block rounded bg-slate-100 p-2 text-xs">
-                {'state* = aggregate(executor_out, verifier_out, routing_costs)'}
+                {`hospitals = nearest(event_coordinates, hospital_index)\nblocked_edges = scan_roads(event_coordinates)\nif blocked_edges is empty: blocked_routes = []\nbest_route = min(Dijkstra(graph, event, hospital) for hospital in hospitals)\nstate* = { hospitals, best_route, blocked_routes, ambulances, shelters }\n${bestRouteDetail}`}
               </code>
             </div>
           ),
         },
       },
-    }),
+    })},
     [data]
   )
 

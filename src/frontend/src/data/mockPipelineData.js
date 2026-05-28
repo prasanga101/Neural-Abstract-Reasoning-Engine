@@ -58,13 +58,16 @@ export const mockPipelineData = {
   verifier: {
     valid: true,
     rule: true,
+    llm: true,
     gemini: true,
     reason:
       'All critical routes have alternatives, shelter occupancy remains below threshold, and ambulance ETA constraints pass policy checks.',
   },
   state: {
     ambulances: 20,
+    ambulances_dispatched: 0,
     shelters: 10,
+    shelters_allocated: 0,
     hospitals: [
       { name: 'Riverside General', lat: 27.703, lon: 85.328 },
       { name: 'North Trauma Unit', lat: 27.719, lon: 85.307 },

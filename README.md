@@ -20,7 +20,7 @@ User message
   -> Planner (Transformer multi-label node prediction)
   -> SLR Builder (dependency-complete DAG)
   -> Executor (tool registry + simulation state)
-  -> Verifier (rule checks + Gemini/Gemma validation)
+  -> Verifier (rule checks + local Ollama validation)
   -> Visualization payload / API response
 ```
 
@@ -110,7 +110,7 @@ Each node is resolved to a tool implementation. Successful outputs are stored in
 The verifier merges two validation strategies:
 
 - [src/verifier/rule_checker.py](src/verifier/rule_checker.py): deterministic checks on environment state, expected outputs, and dependency preconditions.
-- [src/verifier/gemini_verifier.py](src/verifier/gemini_verifier.py): LLM-based review that asks a Gemini-compatible client to return strict JSON containing a validity decision and reason.
+- [src/verifier/gemini_verifier.py](src/verifier/gemini_verifier.py): LLM-based review that asks local Ollama to return strict JSON containing a validity decision and reason.
 
 These are combined in [src/verifier/verifier.py](src/verifier/verifier.py).
 
@@ -191,8 +191,7 @@ Readiness checks verify:
 
 - router model files
 - planner model files
-- `GEMINI_API_KEY` for the verifier
-- `GEMINI_API_KEY` and `GEOAPIFY_API_KEY` for executor dependencies
+- `GEOAPIFY_API_KEY` for executor map/geospatial dependencies
 
 ## Running the project
 
@@ -229,13 +228,14 @@ That script starts:
 At minimum, the backend expects:
 
 ```bash
-GEMINI_API_KEY=...
 GEOAPIFY_API_KEY=...
 ```
 
 Optional:
 
 ```bash
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
 NARE_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
@@ -256,7 +256,7 @@ The API wraps that into visualization-friendly payloads for the frontend.
 ## Notes and current limitations
 
 - There is no committed Python `requirements.txt` or `pyproject.toml` in the root, so Python dependencies are inferred from imports.
-- The verifier currently depends on an external model call and will not be ready without `GEMINI_API_KEY`.
+- The verifier expects a local Ollama server with the configured model available, for example `ollama pull llama3.2`.
 - Some executor nodes still rely on registry coverage and dummy-tool fallback behavior if a node is missing.
 - The RL bandit uses sparse state-keying based on non-zero indices, which is simple and fast but also fairly coarse.
 - Planner metrics are computed in training code, but a committed planner validation report is not currently present.

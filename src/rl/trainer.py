@@ -1,8 +1,29 @@
 import pandas as pd
 import pickle
 import csv
+from datetime import datetime
+from pathlib import Path
 from src.rl.abstraction_learning import init_abstraction
 from src.rl.bandit import BanditAgent
+
+RESULTS_PATH = "TRAINING_RESULTS.md"
+
+
+def _write_results_md(path, section, metrics: dict):
+    existing = Path(path).read_text() if Path(path).exists() else "# Training Results\n"
+    header = f"## {section}"
+    block = (
+        f"\n{header}\n"
+        f"_Last trained: {datetime.now().strftime('%Y-%m-%d %H:%M')}_\n\n"
+        + "\n".join(f"- **{k}**: {v}" for k, v in metrics.items())
+        + "\n"
+    )
+    if header in existing:
+        import re
+        existing = re.sub(rf"{re.escape(header)}.*?(?=\n## |\Z)", block.lstrip("\n"), existing, flags=re.DOTALL)
+    else:
+        existing = existing.rstrip("\n") + "\n" + block
+    Path(path).write_text(existing)
 
 # =========================
 # CONFIG
@@ -10,8 +31,8 @@ from src.rl.bandit import BanditAgent
 DATA_PATH = "data/processed/router_multilabel_dataset.csv"
 MODEL_PATH = "src/rl/bandit.pkl"
 LOG_PATH   = "src/rl/training_log.csv"
-EPOCHS      = 10
-MAX_SAMPLES = 3000   # ← None = full dataset (cache makes this fast)
+EPOCHS      = 300
+MAX_SAMPLES = None
 USE_FAST_MODE = False
 
 # =========================
@@ -104,4 +125,11 @@ with open(LOG_PATH, "w", newline="") as f:
     writer = csv.DictWriter(f, fieldnames=["epoch", "avg_reward", "accuracy"])
     writer.writeheader()
     writer.writerows(log)
+
+final = log[-1] if log else {}
+_write_results_md(RESULTS_PATH, "RL (Bandit)", {
+    "Epochs": len(log),
+    "Final Accuracy": f"{final.get('accuracy', 0):.2f}%",
+    "Final Avg Reward": f"{final.get('avg_reward', 0):.4f}",
+})
 print(f"Log saved → {LOG_PATH}")

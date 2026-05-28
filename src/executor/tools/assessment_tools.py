@@ -1,10 +1,12 @@
 from src.executor.base_tools import BaseTool
-from src.executor.LLMdef.model import GeminiClient
+from src.executor.LLMdef.model import OllamaClient
+
+KNOWN_LOCATION_NAMES = ("pokhara", "kathmandu", "lalitpur", "bhaktapur")
 
 class InjuryAssessmentTool(BaseTool):
     def __init__(self):
         super().__init__(name="assess_injury_severity")
-        self.client = GeminiClient()
+        self.client = OllamaClient()
 
     def run(self, context: dict, env):
         message = env.get_state("message") or ""
@@ -25,7 +27,7 @@ Return ONLY valid JSON:
 
         result = self.client.generate_json(prompt)
 
-        severity = result.get("injury_severity", "low")
+        severity = result.get("injury_severity") or _infer_injury_severity(message)
 
         env.update_state("injury_severity", severity)
 
@@ -65,8 +67,9 @@ class PopulationNeedsAssessmentTool(BaseTool):
         super().__init__(name="assess_population_needs")
 
     def run(self, context: dict, env):
-        population_density = env.get_state("population_density") or 0
-        needs = "high" if population_density > 1000 else "low"
+        event_context = env.get_state("event_context") or {}
+        severity = event_context.get("severity") or env.get_state("injury_severity") or "low"
+        needs = "high" if severity in ("high", "critical") else "moderate" if severity == "moderate" else "low"
         env.update_state("population_needs", needs)
         return {"population_needs": needs}
 
@@ -94,8 +97,9 @@ class PopulationDemandsEstimateTool(BaseTool):
         super().__init__(name="estimate_population_demand")
 
     def run(self, context: dict, env):
-        population_density = env.get_state("population_density") or 0
-        demands = "high" if population_density > 1000 else "low"
+        event_context = env.get_state("event_context") or {}
+        severity = event_context.get("severity") or env.get_state("injury_severity") or "low"
+        demands = "high" if severity in ("high", "critical") else "moderate" if severity == "moderate" else "low"
         env.update_state("population_demands", demands)
         return {"population_demands": demands}
 
@@ -105,7 +109,18 @@ class RegionAccessibilityTool(BaseTool):
         super().__init__(name="prioritize_affected_regions")
 
     def run(self, context: dict, env):
-        accessibility = env.get_state("region_accessibility") or "unknown"
+        event_context = env.get_state("event_context") or {}
+        severity = event_context.get("severity", "low")
+        disaster_type = event_context.get("disaster_type", "unknown")
+
+        impassable_types = {"flood", "tsunami", "earthquake"}
+        if severity == "high" or disaster_type in impassable_types:
+            accessibility = "restricted"
+        elif severity == "moderate":
+            accessibility = "limited"
+        else:
+            accessibility = "accessible"
+
         env.update_state("region_accessibility", accessibility)
         return {"region_accessibility": accessibility}
 
@@ -113,7 +128,7 @@ class RegionAccessibilityTool(BaseTool):
 class EventContextAnalysisTool(BaseTool):
     def __init__(self):
         super().__init__(name="analyze_event_context")
-        self.client = GeminiClient()
+        self.client = OllamaClient()
 
     def run(self, context: dict, env):
         message = env.get_state("message") or ""
@@ -139,12 +154,58 @@ Return ONLY valid JSON:
 
         # safe defaults
         event_context = {
-            "disaster_type": result.get("disaster_type", "unknown"),
-            "location": result.get("location", "unknown"),
-            "severity": result.get("severity", "moderate"),
-            "affected_area": result.get("affected_area", "unknown")
+            "disaster_type": _clean_value(result.get("disaster_type")) or _infer_disaster_type(message),
+            "location": _clean_value(result.get("location")) or _infer_location(message),
+            "severity": _clean_value(result.get("severity")) or _infer_event_severity(message),
+            "affected_area": _clean_value(result.get("affected_area")) or "unknown",
         }
 
         env.update_state("event_context", event_context)
 
         return {"event_context": event_context}
+
+
+def _clean_value(value):
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not value or value.lower() in {"unknown", "none", "null", "n/a"}:
+        return None
+    return value
+
+
+def _infer_location(message):
+    normalized = message.lower()
+    for location in KNOWN_LOCATION_NAMES:
+        if location in normalized:
+            return location.title()
+    if "nepal" in normalized:
+        return "Pokhara"
+    return "Pokhara"
+
+
+def _infer_disaster_type(message):
+    normalized = message.lower()
+    for disaster_type in ("earthquake", "flood", "tsunami", "fire"):
+        if disaster_type in normalized:
+            return disaster_type
+    return "unknown"
+
+
+def _infer_event_severity(message):
+    normalized = message.lower()
+    high_markers = ("major", "critical", "severe", "urgent", "thousands", "mass casualty")
+    if any(marker in normalized for marker in high_markers):
+        return "high"
+    if any(marker in normalized for marker in ("moderate", "injuries", "medical")):
+        return "moderate"
+    return "low"
+
+
+def _infer_injury_severity(message):
+    normalized = message.lower()
+    if any(marker in normalized for marker in ("critical", "severe", "major", "thousands", "mass casualty")):
+        return "critical"
+    if any(marker in normalized for marker in ("injuries", "injury", "medical", "ambulance")):
+        return "moderate"
+    return "low"

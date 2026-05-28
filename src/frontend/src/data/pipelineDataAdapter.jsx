@@ -26,18 +26,42 @@ const EMPTY_PIPELINE_DATA = {
     timeline: [],
   },
   verifier: {
-    valid: false,
+    valid: null,
+    status: 'indeterminate',
     rule: false,
-    gemini: false,
+    gemini: null,
+    gemini_available: false,
+    gemini_error_type: null,
+    retry_after_seconds: null,
     reason: '',
   },
   state: {
     ambulances: 0,
+    ambulances_dispatched: 0,
     shelters: 0,
+    shelters_allocated: 0,
     hospitals: [],
     blocked_routes: [],
+    blocked_route_details: [],
+    blocked_route_detection: null,
     routes: [],
     best_route: null,
+    routing_graph: null,
+    resolved_location: null,
+    event_coordinates: null,
+    infrastructure_damage: null,
+    disaster_zone_scan: null,
+    trapped_victims: null,
+    rescue_teams_allocated: null,
+    hospital_capacity_plan: null,
+    resource_allocation_plan: null,
+    information_summary: null,
+    public_report: null,
+    population_demands: null,
+    estimated_affected_population: null,
+    raster_population: null,
+    rasterio_population: null,
+    population_summary: null,
   },
 }
 
@@ -98,8 +122,25 @@ function formatScore(value) {
 function formatRoute(route) {
   if (!route || typeof route !== 'object') return null
   const parts = []
-  if (typeof route.distance === 'number') parts.push(`${roundNumber(route.distance)} km`)
-  if (typeof route.duration === 'number') parts.push(`${roundNumber(route.duration)} min`)
+  const distanceKm =
+    typeof route.distance_km === 'number'
+      ? route.distance_km
+      : typeof route.distance_m === 'number'
+        ? route.distance_m / 1000
+        : typeof route.distance === 'number'
+          ? route.distance
+          : null
+  const durationMin =
+    typeof route.duration_min === 'number'
+      ? route.duration_min
+      : typeof route.duration_s === 'number'
+        ? route.duration_s / 60
+        : typeof route.duration === 'number'
+          ? route.duration
+          : null
+
+  if (typeof distanceKm === 'number') parts.push(`${roundNumber(distanceKm, 2)} km`)
+  if (typeof durationMin === 'number') parts.push(`${roundNumber(durationMin, 1)} min`)
   return parts.join(' · ')
 }
 
@@ -229,6 +270,65 @@ function ExecutionOrder({ title = 'Execution Order', steps = [] }) {
   )
 }
 
+const mathSections = {
+  input: (
+    <div className="space-y-2">
+      <p>Message is split into emergency facts while preserving location, injury, shelter, and routing signals.</p>
+      <code className="block rounded bg-slate-100 p-2 text-xs">
+        {'chunks = split(message, /[,.!?]/)\ncontext = normalize(location + urgency + needs)\nstate_0 = { message, context }'}
+      </code>
+    </div>
+  ),
+  router: (
+    <div className="space-y-2">
+      <p>Router combines classifier scores with emergency keywords so medical, shelter, and routing work stay in the plan.</p>
+      <code className="block rounded bg-slate-100 p-2 text-xs">
+        {'scores = classifier(context)\ntasks = { t | score(t) >= threshold }\nmedical_terms -> add hospital + ambulance\nroute_terms -> add blocked-route scan + route planning'}
+      </code>
+    </div>
+  ),
+  planner: (
+    <div className="space-y-2">
+      <p>Planner expands routed tasks into executable nodes and ranks urgent operational work first.</p>
+      <code className="block rounded bg-slate-100 p-2 text-xs">
+        {'nodes = expand(tasks)\npriority(node) = severity_weight + dependency_weight\nplan = sort(nodes, priority desc)'}
+      </code>
+    </div>
+  ),
+  slr: (
+    <div className="space-y-2">
+      <p>SLR resolves dependencies so hospital lookup, route planning, ambulance dispatch, and shelter allocation run in a valid order.</p>
+      <code className="block rounded bg-slate-100 p-2 text-xs">
+        {'G = (V, E)\nidentify_nearest_hospitals -> dispatch_ambulances\ncollect_sensor_data -> identify_alternative_routes\norder = topological_sort(G)'}
+      </code>
+    </div>
+  ),
+  executor: (
+    <div className="space-y-2">
+      <p>Executor merges every tool result into the tracked emergency state and records the timeline outcome.</p>
+      <code className="block rounded bg-slate-100 p-2 text-xs">
+        {'for node in order:\n  result = run_tool(node, state_t)\n  state_t+1 = merge(state_t, result.updates)\n  timeline += { node, status, result }'}
+      </code>
+    </div>
+  ),
+  verifier: (
+    <div className="space-y-2">
+      <p>Verifier combines deterministic resource rules with local Ollama validation; used resources are valid as long as counts are nonnegative.</p>
+      <code className="block rounded bg-slate-100 p-2 text-xs">
+        {'rule_ok = ambulances >= 0 AND shelters >= 0\nmodel_ok = ollama_validate(trace, final_state)\nvalid = rule_ok AND model_ok'}
+      </code>
+    </div>
+  ),
+  final: (
+    <div className="space-y-2">
+      <p>Final state is assembled from hospital candidates, Dijkstra/OSRM route costs, blocked-route scan results, and allocated resources.</p>
+      <code className="block rounded bg-slate-100 p-2 text-xs">
+        {'hospitals = nearest(event_coordinates, hospital_index)\nblocked_edges = scan_roads(event_coordinates)\nif blocked_edges is empty: blocked_routes = []\nbest_route = min(Dijkstra(graph, event, hospital) for hospital in hospitals)\nstate* = { hospitals, best_route, blocked_routes, ambulances, shelters }'}
+      </code>
+    </div>
+  ),
+}
+
 export function isPipelineVizData(value) {
   const data = asObject(value)
   return Boolean(
@@ -250,6 +350,13 @@ export function normalizePipelineData(rawData) {
   const executor = asObject(data.executor)
   const verifier = asObject(data.verifier)
   const state = asObject(data.state)
+  const populationDemands = state.population_demands ? asObject(state.population_demands) : null
+  const rasterPopulation = state.raster_population
+    ? asObject(state.raster_population)
+    : populationDemands
+  const rasterioPopulation = state.rasterio_population
+    ? asObject(state.rasterio_population)
+    : rasterPopulation
 
   return {
     message: typeof data.message === 'string' ? data.message : EMPTY_PIPELINE_DATA.message,
@@ -279,18 +386,70 @@ export function normalizePipelineData(rawData) {
       timeline: asArray(executor.timeline),
     },
     verifier: {
-      valid: Boolean(verifier.valid),
+      valid: typeof verifier.valid === 'boolean' ? verifier.valid : null,
+      status:
+        typeof verifier.status === 'string'
+          ? verifier.status
+          : verifier.valid === null || verifier.valid === undefined
+            ? 'indeterminate'
+            : verifier.valid
+              ? 'valid'
+              : 'invalid',
       rule: Boolean(verifier.rule),
-      gemini: Boolean(verifier.gemini),
+      llm:
+        typeof verifier.llm === 'boolean'
+          ? verifier.llm
+          : typeof verifier.gemini === 'boolean'
+            ? verifier.gemini
+            : null,
+      gemini:
+        typeof verifier.gemini === 'boolean'
+          ? verifier.gemini
+          : typeof verifier.llm === 'boolean'
+            ? verifier.llm
+            : null,
+      gemini_available: verifier.gemini_available !== false,
+      gemini_error_type:
+        typeof verifier.gemini_error_type === 'string' ? verifier.gemini_error_type : null,
+      retry_after_seconds:
+        typeof verifier.retry_after_seconds === 'number' ? verifier.retry_after_seconds : null,
       reason: typeof verifier.reason === 'string' ? verifier.reason : '',
     },
     state: {
       ambulances: typeof state.ambulances === 'number' ? state.ambulances : 0,
+      ambulances_dispatched:
+        typeof state.ambulances_dispatched === 'number' ? state.ambulances_dispatched : 0,
       shelters: typeof state.shelters === 'number' ? state.shelters : 0,
+      shelters_allocated: typeof state.shelters_allocated === 'number' ? state.shelters_allocated : 0,
       hospitals: asArray(state.hospitals),
       blocked_routes: asArray(state.blocked_routes),
+      blocked_route_details: asArray(state.blocked_route_details),
+      blocked_route_detection: state.blocked_route_detection
+        ? asObject(state.blocked_route_detection)
+        : null,
       routes: asArray(state.routes),
       best_route: asObject(state.best_route),
+      routing_graph: state.routing_graph ? asObject(state.routing_graph) : null,
+      resolved_location: state.resolved_location ? asObject(state.resolved_location) : null,
+      event_coordinates: state.event_coordinates ? asObject(state.event_coordinates) : null,
+      infrastructure_damage: state.infrastructure_damage ? asObject(state.infrastructure_damage) : null,
+      disaster_zone_scan: state.disaster_zone_scan ? asObject(state.disaster_zone_scan) : null,
+      trapped_victims: state.trapped_victims ? asObject(state.trapped_victims) : null,
+      rescue_teams_allocated:
+        typeof state.rescue_teams_allocated === 'number' ? state.rescue_teams_allocated : null,
+      hospital_capacity_plan: state.hospital_capacity_plan ? asObject(state.hospital_capacity_plan) : null,
+      resource_allocation_plan: state.resource_allocation_plan ? asObject(state.resource_allocation_plan) : null,
+      information_summary: state.information_summary ? asObject(state.information_summary) : null,
+      public_report: state.public_report ? asObject(state.public_report) : null,
+      population_demands: populationDemands,
+      estimated_affected_population:
+        typeof state.estimated_affected_population === 'number'
+          ? state.estimated_affected_population
+          : null,
+      raster_population: rasterPopulation,
+      rasterio_population: rasterioPopulation,
+      population_summary:
+        typeof state.population_summary === 'string' ? state.population_summary : null,
     },
   }
 }
@@ -332,7 +491,10 @@ export function summarizeStage(id, rawData) {
   if (id === 'planner') return data.planner.top ? `top → ${data.planner.top}` : `${data.planner.nodes.length} nodes`
   if (id === 'slr') return `${data.slr.nodes.length} nodes · ${data.slr.edges.length} edges`
   if (id === 'executor') return `${data.executor.timeline.length} steps`
-  if (id === 'verifier') return data.verifier.valid ? 'passed ✓' : 'failed ✗'
+  if (id === 'verifier') {
+    if (data.verifier.valid === null) return 'indeterminate'
+    return data.verifier.valid ? 'passed ✓' : 'failed ✗'
+  }
   return `${data.state.routes.length} routes`
 }
 
@@ -352,7 +514,6 @@ export function buildPipelineSections(rawData) {
   const topTimelineNodes = quotedList(
     data.executor.timeline.map((step) => step?.node).filter(Boolean).slice(0, 4)
   )
-  const rlClassifierTasks = quotedList(data.router.rl.classifier_tasks.slice(0, 3))
   const routerPriorityOrder = data.router.scores.length
     ? data.router.scores.map((entry) => entry.task)
     : data.router.tasks
@@ -411,20 +572,36 @@ export function buildPipelineSections(rawData) {
     }
 
     if (mentionsMedical) {
-      finalStateSentences.push(
-        `${data.state.ambulances} ambulance${
-          data.state.ambulances === 1 ? '' : 's'
-        } remain available in the tracked state after execution.`
-      )
+      if (data.state.ambulances_dispatched) {
+        finalStateSentences.push(
+          `${data.state.ambulances_dispatched} ambulance${
+            data.state.ambulances_dispatched === 1 ? '' : 's'
+          } were dispatched; ${data.state.ambulances} remain available.`
+        )
+      } else {
+        finalStateSentences.push(
+          `${data.state.ambulances} ambulance${
+            data.state.ambulances === 1 ? '' : 's'
+          } remain available in the tracked state after execution.`
+        )
+      }
     }
   }
 
   if (mentionsShelter || data.state.shelters) {
-    finalStateSentences.push(
-      `${data.state.shelters} shelter${
-        data.state.shelters === 1 ? '' : 's'
-      } remain represented in the current response snapshot.`
-    )
+    if (data.state.shelters_allocated) {
+      finalStateSentences.push(
+        `${data.state.shelters_allocated} shelter${
+          data.state.shelters_allocated === 1 ? '' : 's'
+        } were allocated; ${data.state.shelters} remain available.`
+      )
+    } else {
+      finalStateSentences.push(
+        `${data.state.shelters} shelter${
+          data.state.shelters === 1 ? '' : 's'
+        } remain represented in the current response snapshot.`
+      )
+    }
   }
 
   if (mentionsRouting || data.state.routes.length || data.state.blocked_routes.length) {
@@ -443,6 +620,10 @@ export function buildPipelineSections(rawData) {
     if (data.state.blocked_routes.length) {
       finalStateSentences.push(
         `Blocked corridors were identified${topBlockedRoutes ? `, including ${topBlockedRoutes}` : ''}.`
+      )
+    } else if (mentionsRouting || data.state.routes.length) {
+      finalStateSentences.push(
+        data.state.blocked_route_detection?.message || 'No routes are blocked in the current response snapshot.'
       )
     }
   }
@@ -463,12 +644,7 @@ export function buildPipelineSections(rawData) {
         </p>
       ),
       details: <JsonBlock value={{ message: data.message }} />,
-      math: (
-        <p>
-          Input text is prepared as a context signal for the rest of the pipeline. The frontend will
-          faithfully display whatever normalized pipeline JSON you send for this stage.
-        </p>
-      ),
+      math: mathSections.input,
     },
     router: {
       overview: (
@@ -487,20 +663,7 @@ export function buildPipelineSections(rawData) {
         </div>
       ),
       details: <JsonBlock value={data.router} />,
-      math: (
-        <div>
-          <p style={{ margin: 0 }}>
-            Router results are rendered directly from the JSON payload: predicted tasks, sorted scores,
-            the promoted top intent, and RL routing metadata when present.
-          </p>
-          {data.router.rl.action ? (
-            <p style={{ margin: '8px 0 0' }}>
-              RL source: {data.router.rl.source ?? 'unknown'}
-              {rlClassifierTasks ? ` · classifier candidates: ${rlClassifierTasks}` : ''}
-            </p>
-          ) : null}
-        </div>
-      ),
+      math: mathSections.router,
     },
     planner: {
       overview: (
@@ -517,12 +680,7 @@ export function buildPipelineSections(rawData) {
         </div>
       ),
       details: <JsonBlock value={data.planner} />,
-      math: (
-        <p>
-          Planner display is derived from the real planner JSON: predicted nodes, score ordering, and
-          the chosen top action for execution.
-        </p>
-      ),
+      math: mathSections.planner,
     },
     slr: {
       overview: (
@@ -537,12 +695,7 @@ export function buildPipelineSections(rawData) {
         </div>
       ),
       details: <JsonBlock value={data.slr} />,
-      math: (
-        <p>
-          SLR phase is visualized from the graph JSON itself: node set, dependency edges, and the final
-          execution order emitted by your symbolic reasoning layer.
-        </p>
-      ),
+      math: mathSections.slr,
     },
     executor: {
       overview: (
@@ -562,30 +715,26 @@ export function buildPipelineSections(rawData) {
         </div>
       ),
       details: <JsonBlock value={data.executor} />,
-      math: (
-        <p>
-          Execution details are generated from the live trace JSON, so each step, node name, and status
-          reflects the actual run you provide.
-        </p>
-      ),
+      math: mathSections.executor,
     },
     verifier: {
       overview: (
         <p>
           The verifier reviewed the executed plan and returned an overall{' '}
-          {data.verifier.valid ? 'valid' : 'invalid'} outcome. The rule check{' '}
+          {data.verifier.status || (data.verifier.valid === null ? 'indeterminate' : data.verifier.valid ? 'valid' : 'invalid')}{' '}
+          outcome. The rule check{' '}
           {data.verifier.rule ? 'passed' : 'failed'}, the model-based validation{' '}
-          {data.verifier.gemini ? 'passed' : 'failed'}, and the main explanation was:{' '}
+          {data.verifier.gemini_available
+            ? data.verifier.llm
+              ? 'passed'
+              : 'failed'
+            : 'was unavailable'}
+          , and the main explanation was:{' '}
           {data.verifier.reason || 'No verifier explanation was returned.'}
         </p>
       ),
       details: <JsonBlock value={data.verifier} />,
-      math: (
-        <p>
-          Verifier output is read straight from the JSON payload, including overall validity, per-check
-          results, and the explanation text.
-        </p>
-      ),
+      math: mathSections.verifier,
     },
     final: {
       overview: (
@@ -598,12 +747,7 @@ export function buildPipelineSections(rawData) {
         </div>
       ),
       details: <JsonBlock value={data.state} />,
-      math: (
-        <p>
-          Final state content comes from the returned environment snapshot, including route options,
-          hospital metadata, blocked routes, and the selected best route.
-        </p>
-      ),
+      math: mathSections.final,
     },
   }
 }

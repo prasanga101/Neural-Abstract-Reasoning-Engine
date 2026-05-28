@@ -77,6 +77,7 @@ class ToolRegistry:
             "identify_alternative_routes": AlternativeRouteTool(),
             "optimize_transport_paths": TransportOptimizationTool(),
             "dispatch_relief_teams": RescueTeamAllocationTool(),
+            "allocate_resources": ReliefAllocationTool(),
         }
 
     def get_tool(self, tool_name: str):

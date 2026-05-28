@@ -11,6 +11,7 @@ class AmbulanceDispatchTool(BaseTool):
         ambulances_to_dispatch = min(estimated_casualties // 10, available_ambulances)
 
         env.update_state("available_ambulances", available_ambulances - ambulances_to_dispatch)
+        env.update_state("ambulances_dispatched", ambulances_to_dispatch)
         return {"ambulances_dispatched": ambulances_to_dispatch}
 
 class ShelterAllocationTool(BaseTool):
@@ -25,6 +26,7 @@ class ShelterAllocationTool(BaseTool):
         shelters_to_allocate = min(shelters_needed, available_shelters)
 
         env.update_state("available_shelters", available_shelters - shelters_to_allocate)
+        env.update_state("shelters_allocated", shelters_to_allocate)
         return {"shelters_allocated": shelters_to_allocate}
 class ReliefAllocationTool(BaseTool):
 

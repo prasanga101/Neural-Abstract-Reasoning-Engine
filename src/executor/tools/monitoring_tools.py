@@ -1,6 +1,14 @@
 from src.executor.base_tools import BaseTool
 import requests
 
+KNOWN_LOCATIONS = {
+    "pokhara": (28.2096, 83.9856),
+    "kathmandu": (27.7172, 85.3240),
+    "lalitpur": (27.6588, 85.3247),
+    "bhaktapur": (27.6710, 85.4298),
+    "nepal": (28.2096, 83.9856),
+}
+
 class DisasterMonitoringTool(BaseTool):
     def __init__(self):
         super().__init__(name="monitor_disaster_activity")
@@ -17,17 +25,23 @@ class SensorCollectionTool(BaseTool):
     def run(self, context: dict, env):
         event_context = env.get_state("event_context") or {}
         location = event_context.get("location", "Kathmandu")
+        latitude, longitude = _known_location_coords(location)
         try:
-            geo_response = requests.get(
-                "https://geocoding-api.open-meteo.com/v1/search",
-                params={"name": location, "count": 1},
-                timeout=5
-            )
-            geo_data = geo_response.json()
-            results = geo_data.get("results", [])
-            if results:
-                latitude = results[0].get("latitude")
-                longitude = results[0].get("longitude")
+            if latitude is None or longitude is None:
+                geo_response = requests.get(
+                    "https://geocoding-api.open-meteo.com/v1/search",
+                    params={"name": location, "count": 1},
+                    timeout=5
+                )
+                geo_data = geo_response.json()
+                results = geo_data.get("results", [])
+                if results:
+                    latitude = results[0].get("latitude")
+                    longitude = results[0].get("longitude")
+
+            if latitude is None or longitude is None:
+                latitude, longitude = KNOWN_LOCATIONS["pokhara"]
+
             weather_response = requests.get(
                 "https://api.open-meteo.com/v1/forecast",
                 params={
@@ -47,10 +61,12 @@ class SensorCollectionTool(BaseTool):
                 "windspeed": current.get("windspeed")
             }
         except Exception:
+            if latitude is None or longitude is None:
+                latitude, longitude = KNOWN_LOCATIONS["pokhara"]
             sensor_data = {
                 "location": location,
-                "latitude": None,
-                "longitude": None,
+                "latitude": latitude,
+                "longitude": longitude,
                 "temperature": 25,
                 "humidity": 70,
                 "wind_speed": 10
@@ -64,10 +80,13 @@ class DisasterAnalysisTool(BaseTool):
         super().__init__(name="analyze_disaster_data")
 
     def run(self, context: dict, env):
-        sensor_data = env.get_state("sensor_data") or {}
+        event_context = env.get_state("event_context") or {}
+        severity = event_context.get("severity") or env.get_state("injury_severity") or "low"
 
-        if sensor_data.get("temperature", 0) > 28 and sensor_data.get("wind_speed", 0) > 15:
+        if severity in ("high", "critical"):
             analysis_result = "high_risk"
+        elif severity == "moderate":
+            analysis_result = "medium_risk"
         else:
             analysis_result = "low_risk"
 
@@ -90,3 +109,11 @@ class SituationReportTool(BaseTool):
 
         env.update_state("situation_report", report)
         return {"situation_report": report}
+
+
+def _known_location_coords(location):
+    normalized = str(location or "").strip().lower()
+    for key, coords in KNOWN_LOCATIONS.items():
+        if key in normalized:
+            return coords
+    return None, None

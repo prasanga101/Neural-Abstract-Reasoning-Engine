@@ -54,12 +54,6 @@ class Executor:
                     "status": node.status,
                     "error": str(e)
                 })
-
-                return {
-                    "status": "failed",
-                    "execution_trace": self.execution_trace,
-                    "final_outputs": self.context
-                }
         result ={
             "status": "completed",
             "execution_trace": self.execution_trace,

@@ -15,7 +15,7 @@ export function VerifierPanel({ verifier }) {
       <div className="flex flex-wrap gap-1.5">
         <Pill label="Verdict" value={verifier.valid} />
         <Pill label="Rule" value={verifier.rule} />
-        <Pill label="Gemini" value={verifier.gemini} />
+        <Pill label="Ollama" value={verifier.llm ?? verifier.gemini} />
       </div>
       <p className="line-clamp-3 text-[11px] leading-relaxed text-slate-600">{verifier.reason}</p>
     </div>
