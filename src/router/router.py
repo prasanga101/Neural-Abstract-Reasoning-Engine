@@ -10,7 +10,7 @@ import pickle
 # SAFE PATH LOADING
 # =========================
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-BANDIT_PATH = BASE_DIR / "src" / "rl" / "bandit.pkl"
+BANDIT_PATH = BASE_DIR / "src" / "rl" / "bandit_full.pkl"
 
 with open(BANDIT_PATH, "rb") as f:
     agent = pickle.load(f)
@@ -54,7 +54,7 @@ def route_query(text, model, tokenizer, threshold=0.5):
         rl_injected = True
 
     # --- FILTERING — use passed threshold, not hardcoded ---
-    TOP_K = 3
+    TOP_K = 5
 
     filtered = [
         (task, score)

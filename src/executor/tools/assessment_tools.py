@@ -62,6 +62,80 @@ class StructuralDamageAssessmentTool(BaseTool):
         return {"damage_assessment": damage_level}
 
 
+class InfrastructureDamageAssessmentTool(BaseTool):
+    def __init__(self):
+        super().__init__(name="assess_infrastructure_damage")
+
+    def run(self, context: dict, env):
+        event_context = env.get_state("event_context") or {}
+        message = (env.get_state("message") or "").lower()
+        blocked_routes = env.get_state("blocked_routes") or []
+        disaster_type = event_context.get("disaster_type", "unknown")
+        severity = event_context.get("severity", "moderate")
+
+        damage_score = 0
+
+        if severity in {"high", "major", "severe", "critical"}:
+            damage_score += 3
+        elif severity == "moderate":
+            damage_score += 2
+        else:
+            damage_score += 1
+
+        if disaster_type in {"earthquake", "flood", "landslide"}:
+            damage_score += 2
+
+        damage_terms = [
+            "collapsed",
+            "collapse",
+            "blocked",
+            "damaged",
+            "destroyed",
+            "cracked",
+            "bridge",
+            "road",
+            "route",
+            "infrastructure",
+        ]
+        damage_score += sum(1 for term in damage_terms if term in message)
+        damage_score += min(len(blocked_routes), 3)
+
+        if damage_score >= 7:
+            damage_level = "severe"
+        elif damage_score >= 4:
+            damage_level = "moderate"
+        else:
+            damage_level = "low"
+
+        assessment = {
+            "damage_level": damage_level,
+            "score": damage_score,
+            "blocked_route_count": len(blocked_routes),
+            "affected_infrastructure": self._affected_infrastructure(message),
+        }
+
+        env.update_state("damage_level", damage_level)
+        env.update_state("infrastructure_damage", assessment)
+        return {"infrastructure_damage": assessment}
+
+    def _affected_infrastructure(self, message):
+        mapping = {
+            "roads": ["road", "route", "highway", "street"],
+            "bridges": ["bridge"],
+            "buildings": ["building", "house", "school", "hospital"],
+            "power": ["electricity", "power", "grid"],
+            "water": ["water", "pipeline", "sanitation"],
+        }
+
+        affected = [
+            label
+            for label, terms in mapping.items()
+            if any(term in message for term in terms)
+        ]
+
+        return affected or ["general_access"]
+
+
 class PopulationNeedsAssessmentTool(BaseTool):
     def __init__(self):
         super().__init__(name="assess_population_needs")
@@ -95,6 +169,9 @@ class ResourceAvailabilityAnalysisTool(BaseTool):
 class PopulationDemandsEstimateTool(BaseTool):
     def __init__(self):
         super().__init__(name="estimate_population_demand")
+        self.client = GeminiClient()
+        self.raster_path = "data/nepal_population.tif"
+        self.default_radius_km = 1.0
 
     def run(self, context: dict, env):
         event_context = env.get_state("event_context") or {}
@@ -237,6 +314,9 @@ class EventContextAnalysisTool(BaseTool):
 You are a disaster analysis expert.
 
 Extract structured context from the message.
+Preserve the most specific location phrase found in the message.
+For example, if the message says "New Baneshwor, Kathmandu, Nepal",
+return "New Baneshwor, Kathmandu, Nepal" instead of only "Kathmandu".
 
 Message:
 {message}

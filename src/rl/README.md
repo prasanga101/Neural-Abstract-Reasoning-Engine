@@ -9,8 +9,63 @@ This folder contains the abstraction-learning and bandit-routing support used by
 - [epsilon_greedy.py](epsilon_greedy.py): exploration helper.
 - [trainer.py](trainer.py): trains the bandit using the router dataset.
 - [eval_orthogonality.py](eval_orthogonality.py): diagnostic script for feature-layer independence.
-- [bandit.pkl](bandit.pkl): saved trained agent used at runtime.
+- [bandit.pkl](bandit.pkl): saved trained agent used at runtime (full mode).
 - [training_log.csv](training_log.csv): saved RL training log.
+
+---
+
+## Ablation Study
+
+### What is being ablated
+
+The `extract()` method in [abstraction_learning.py](abstraction_learning.py) accepts a `mode` argument that enables isolated evaluation of each feature layer:
+
+| Mode | Layers active | State dimension |
+|---|---|---|
+| `tfidf_only` | TF-IDF PCA | 200 |
+| `sbert_only` | SBERT sentence embedding | 384 |
+| `full` | SBERT + TF-IDF + Label co-occurrence | 620 |
+
+### How to run
+
+Set `ABLATION_MODE` at the top of [trainer.py](trainer.py) before each run:
+
+```bash
+# Run 1 — TF-IDF only
+# Set ABLATION_MODE = "tfidf_only" in trainer.py
+python -m src.rl.trainer
+# → saves bandit_tfidf_only.pkl + training_log_tfidf_only.csv
+
+# Run 2 — SBERT only
+# Set ABLATION_MODE = "sbert_only" in trainer.py
+python -m src.rl.trainer
+# → saves bandit_sbert_only.pkl + training_log_sbert_only.csv
+
+# Run 3 — Full system
+# Set ABLATION_MODE = "full" in trainer.py
+python -m src.rl.trainer
+# → saves bandit_full.pkl + training_log_full.csv
+```
+
+Each run uses 100 epochs over 3,000 samples (configurable via `MAX_SAMPLES`).
+
+### Results
+
+| Configuration | State dim | Final accuracy | Avg reward (final epoch) |
+|---|---|---|---|
+| TF-IDF only | 200 | — | — |
+| SBERT only | 384 | — | — |
+| Full system | 620 | — | — |
+
+> Fill in after running all three training runs. Expected outcome: `full > sbert_only > tfidf_only`.
+
+### Interpretation guide
+
+- **Full > SBERT only**: the label co-occurrence layer adds signal beyond semantics alone.
+- **SBERT only > TF-IDF only**: semantic embeddings capture intent better than surface lexical features.
+- **Full > all others**: confirms that all three layers contribute independently — the paper's core claim.
+
+If the ordering is not as expected, run [eval_orthogonality.py](eval_orthogonality.py) to check whether layers are redundant (high CKA = overlapping signal).
 
 ## Abstraction state design
 

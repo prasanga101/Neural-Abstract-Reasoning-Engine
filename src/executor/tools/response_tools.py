@@ -59,6 +59,17 @@ class HospitalDispatchTool(BaseTool):
             if lat is None or lon is None:
                 return []
 
+            lat = resolved_location["latitude"]
+            lon = resolved_location["longitude"]
+
+            env.update_state("resolved_location", resolved_location)
+            env.update_state("event_coordinates", {
+                "latitude": lat,
+                "longitude": lon,
+                "location": resolved_location.get("formatted") or location,
+                "source": resolved_location.get("source"),
+            })
+
             url = (
                 "https://api.geoapify.com/v2/places"
                 f"?categories=healthcare.hospital"
@@ -119,10 +130,10 @@ Return ONLY a valid JSON array (no extra text):
                 return coords
 
         try:
-            response = requests.get(
-                "https://geocoding-api.open-meteo.com/v1/search",
-                params={"name": location, "count": 1},
-                timeout=5
+            response = requests.post(
+                "https://overpass-api.de/api/interpreter",
+                data={"data": query},
+                timeout=15,
             )
             response.raise_for_status()
             results = response.json().get("results", [])
@@ -170,19 +181,137 @@ class DeployRescueTeamsTool(BaseTool):
         super().__init__(name="deploy_rescue_teams")
 
     def run(self, context: dict, env):
-        damage_assessment = env.get_state("damage_assessment") or "unknown"
-        population_needs = env.get_state("population_needs") or "low"
+        infrastructure_damage = env.get_state("infrastructure_damage") or {}
+        damage_assessment = (
+            infrastructure_damage.get("damage_level")
+            or env.get_state("damage_assessment")
+            or "unknown"
+        )
+        trapped_victims = env.get_state("trapped_victims") or {}
+        trapped_count = trapped_victims.get("estimated_trapped_victims", 0)
+        teams_available = env.get_state("available_rescue_teams") or 10
 
-        if damage_assessment == "severe" and population_needs == "high":
-            rescue_teams_allocated = 5
+        if damage_assessment == "severe":
+            teams_needed = max(4, trapped_count // 25)
         elif damage_assessment == "moderate":
-            rescue_teams_allocated = 3
+            teams_needed = max(2, trapped_count // 40)
         else:
-            rescue_teams_allocated = 1
+            teams_needed = max(1, trapped_count // 75)
 
+        rescue_teams_allocated = min(teams_available, teams_needed)
+        env.update_state("available_rescue_teams", teams_available - rescue_teams_allocated)
         env.update_state("rescue_teams_allocated", rescue_teams_allocated)
 
-        return {"rescue_teams_allocated": rescue_teams_allocated}
+        return {
+            "rescue_teams_allocated": rescue_teams_allocated,
+            "teams_needed": teams_needed,
+            "teams_remaining": teams_available - rescue_teams_allocated,
+            "basis": {
+                "damage_assessment": damage_assessment,
+                "estimated_trapped_victims": trapped_count,
+            },
+        }
+
+
+class DisasterZoneScanTool(BaseTool):
+    def __init__(self):
+        super().__init__(name="scan_disaster_zone")
+
+    def run(self, context: dict, env):
+        event_context = env.get_state("event_context") or {}
+        coordinates = env.get_state("event_coordinates") or {}
+        infrastructure_damage = env.get_state("infrastructure_damage") or {}
+        sensor_data = env.get_state("sensor_data") or {}
+        message = (env.get_state("message") or "").lower()
+
+        severity = event_context.get("severity", "moderate")
+        damage_level = infrastructure_damage.get("damage_level", "unknown")
+
+        if severity == "high" or damage_level == "severe":
+            scan_radius_km = 3.0
+            priority = "urgent"
+        elif severity == "moderate" or damage_level == "moderate":
+            scan_radius_km = 1.5
+            priority = "high"
+        else:
+            scan_radius_km = 0.75
+            priority = "normal"
+
+        hazards = []
+        if "earthquake" in message or event_context.get("disaster_type") == "earthquake":
+            hazards.extend(["aftershock_risk", "structural_collapse"])
+        if "flood" in message:
+            hazards.append("inundation")
+        if "fire" in message:
+            hazards.append("fire_spread")
+        if sensor_data.get("windspeed", 0) and sensor_data.get("windspeed", 0) > 20:
+            hazards.append("high_wind")
+
+        scan = {
+            "center": {
+                "latitude": coordinates.get("latitude"),
+                "longitude": coordinates.get("longitude"),
+                "location": coordinates.get("location") or event_context.get("location"),
+            },
+            "radius_km": scan_radius_km,
+            "priority": priority,
+            "hazards": list(dict.fromkeys(hazards)) or ["access_disruption"],
+            "recommended_methods": ["drone_survey", "field_team_sweep", "hospital_access_check"],
+        }
+
+        env.update_state("disaster_zone_scan", scan)
+        return {"disaster_zone_scan": scan}
+
+
+class TrappedVictimLocationTool(BaseTool):
+    def __init__(self):
+        super().__init__(name="locate_trapped_victims")
+
+    def run(self, context: dict, env):
+        scan = env.get_state("disaster_zone_scan") or {}
+        infrastructure_damage = env.get_state("infrastructure_damage") or {}
+        estimated_casualties = env.get_state("estimated_casualties") or 0
+        message = (env.get_state("message") or "").lower()
+
+        damage_level = infrastructure_damage.get("damage_level", "unknown")
+        trapped_ratio = 0.08
+
+        if damage_level == "severe":
+            trapped_ratio = 0.22
+        elif damage_level == "moderate":
+            trapped_ratio = 0.14
+
+        if any(term in message for term in ["trapped", "collapsed", "rubble", "buried"]):
+            trapped_ratio += 0.08
+
+        estimated_trapped = int(max(0, estimated_casualties * trapped_ratio))
+        center = scan.get("center") or {}
+        radius_km = scan.get("radius_km") or 1.0
+
+        hotspots = [
+            {
+                "zone": "inner_impact_zone",
+                "estimated_victims": int(estimated_trapped * 0.6),
+                "radius_km": round(radius_km * 0.35, 2),
+                "priority": "critical" if estimated_trapped else "monitor",
+            },
+            {
+                "zone": "outer_impact_zone",
+                "estimated_victims": estimated_trapped - int(estimated_trapped * 0.6),
+                "radius_km": radius_km,
+                "priority": "high" if estimated_trapped else "monitor",
+            },
+        ]
+
+        trapped_victims = {
+            "center": center,
+            "estimated_trapped_victims": estimated_trapped,
+            "confidence": "medium" if estimated_casualties else "low",
+            "hotspots": hotspots,
+        }
+
+        env.update_state("trapped_victims", trapped_victims)
+        return {"trapped_victims": trapped_victims}
 
 
 class SupplySourceIdentificationTool(BaseTool):

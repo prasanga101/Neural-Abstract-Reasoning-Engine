@@ -1,4 +1,6 @@
 from src.executor.base_tools import BaseTool
+import heapq
+import math
 import requests
 from heapq import heappop, heappush
 from math import asin, cos, radians, sin, sqrt
@@ -35,7 +37,7 @@ class AlternativeRouteTool(BaseTool):
         sensor_data = env.get_state("sensor_data") or {}
         hospitals = env.get_state("nearby_hospitals") or env.get_state("available_hospitals") or []
 
-        if not sensor_data or not hospitals:
+        if not hospitals:
             env.update_state("alternative_routes", [])
             return {"alternative_routes": []}
 
@@ -75,9 +77,12 @@ class AlternativeRouteTool(BaseTool):
     def _fetch_osrm_routes(self, src_lat, src_lon, dest_lat, dest_lon, hospital):
         try:
             response = requests.get(
-                f"https://router.project-osrm.org/route/v1/driving/{src_lon},{src_lat};{dest_lon},{dest_lat}",
+                (
+                    "https://router.project-osrm.org/route/v1/driving/"
+                    f"{src_lon},{src_lat};{dest_lon},{dest_lat}"
+                ),
                 params={
-                    "alternatives": "true",
+                    "alternatives": "false",
                     "overview": "false",
                     "steps": "false",
                 },

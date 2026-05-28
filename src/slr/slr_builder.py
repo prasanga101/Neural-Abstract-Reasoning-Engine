@@ -34,6 +34,9 @@ class SLRBuilder:
                 "assess_injury_severity",
                 "estimate_number_of_casualties",
             ],
+            "allocate_temporary_shelters": [
+                "estimate_number_of_casualties"
+            ],
             "dispatch_ambulances": [
                 "assess_injury_severity",
                 "estimate_number_of_casualties",
@@ -44,14 +47,23 @@ class SLRBuilder:
                 "assess_population_needs"
             ],
             "deploy_rescue_teams": [
-                "assess_structural_damage",
+                "assess_infrastructure_damage",
                 "locate_trapped_victims"
             ],
             "detect_blocked_routes": ["collect_sensor_data"],
             "assess_structural_damage": ["analyze_event_context"],
-            "scan_disaster_zone": ["analyze_event_context"],
-            "locate_trapped_victims": ["scan_disaster_zone"],
-            "assess_infrastructure_damage": ["analyze_event_context"],
+            "scan_disaster_zone": [
+                "analyze_event_context",
+                "assess_infrastructure_damage"
+            ],
+            "locate_trapped_victims": [
+                "scan_disaster_zone",
+                "estimate_number_of_casualties"
+            ],
+            "assess_infrastructure_damage": [
+                "analyze_event_context",
+                "detect_blocked_routes"
+            ],
             "monitor_disaster_activity": ["analyze_event_context"],
             "analyze_disaster_data": ["collect_sensor_data"],
             "generate_situation_reports": ["analyze_disaster_data"],
@@ -63,10 +75,11 @@ class SLRBuilder:
             ],
             "coordinate_hospital_capacity": [
                 "identify_nearest_hospitals",
-                "assess_injury_severity"
+                "assess_injury_severity",
+                "estimate_number_of_casualties"
             ],
             "prioritize_affected_regions": ["analyze_event_context"],
-            "estimate_population_demand": ["analyze_event_context"],
+            "estimate_population_demand": ["analyze_event_context", "identify_nearest_hospitals"],
             "analyze_resource_availability": ["analyze_event_context"],
             "identify_supply_sources": ["analyze_event_context"],
             "assess_population_needs": ["analyze_event_context"],

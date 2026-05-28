@@ -43,22 +43,29 @@ df = pd.read_csv(DATA_PATH)
 if MAX_SAMPLES:
     df = df.sample(MAX_SAMPLES, random_state=42)
 
-rows = df.to_dict("records")
+rows    = df.to_dict("records")
 actions = [col for col in df.columns if col != "message"]
 
+print(f"Device        : {DEVICE}")
+print(f"Ablation mode : {ABLATION_MODE}")
+print(f"State dim     : {STATE_DIMS[ABLATION_MODE]}")
 print(f"Dataset size  : {len(rows)}")
 print(f"Actions       : {len(actions)}")
 print(f"Epochs        : {EPOCHS}")
+print(f"Model path    : {MODEL_PATH}")
 print("=" * 40)
 
 # =========================
 # INIT
 # =========================
 abstraction = init_abstraction()
-agent       = BanditAgent(actions=actions)
-state_cache = {}
+agent       = BanditAgent(actions=actions, state_dim=STATE_DIMS[ABLATION_MODE])  # ← fixed
 best_reward = -999
 log         = []
+
+# Pre-warm cache
+all_messages = [row["message"] for row in rows]
+state_cache  = abstraction.batch_extract(all_messages, mode=ABLATION_MODE)
 
 # =========================
 # TRAIN LOOP
@@ -70,26 +77,14 @@ for epoch in range(EPOCHS):
         if i % 500 == 0:
             print(f"[Epoch {epoch+1}] Processing {i}/{len(rows)}")
 
-        message = row["message"]
-
-        # STATE EXTRACTION
-        if USE_FAST_MODE:
-            state = message
-        else:
-            if message in state_cache:
-                state = state_cache[message]
-            else:
-                state = abstraction.extract(message)
-                state_cache[message] = state
-
-        # ACTION + REWARD
+        message         = row["message"]
+        state           = state_cache[message]
         correct_actions = [a for a in actions if row[a] == 1]
-        action  = agent.select_action(state)
-        reward  = 1 if action in correct_actions else -0.2
+        action          = agent.select_action(state)
+        reward          = 1 if action in correct_actions else -0.2
         agent.update_q_value(state, action, reward)
         epoch_rewards.append(reward)
 
-    # METRICS
     if len(epoch_rewards) == 0:
         print("No data — exiting")
         break
@@ -106,7 +101,6 @@ for epoch in range(EPOCHS):
         "accuracy"   : accuracy
     })
 
-    # CONVERGENCE CHECK
     if abs(avg_reward - best_reward) < 0.001 and epoch > 50:
         print(f"Converged at epoch {epoch+1} — stopping early")
         break
@@ -116,11 +110,12 @@ for epoch in range(EPOCHS):
 print("\nTraining complete")
 
 # =========================
-# SAVE MODEL
+# SAVE
 # =========================
 with open(MODEL_PATH, "wb") as f:
     pickle.dump(agent, f)
 print(f"Model saved → {MODEL_PATH}")
+
 with open(LOG_PATH, "w", newline="") as f:
     writer = csv.DictWriter(f, fieldnames=["epoch", "avg_reward", "accuracy"])
     writer.writeheader()

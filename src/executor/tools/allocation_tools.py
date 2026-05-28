@@ -28,6 +28,53 @@ class ShelterAllocationTool(BaseTool):
         env.update_state("available_shelters", available_shelters - shelters_to_allocate)
         env.update_state("shelters_allocated", shelters_to_allocate)
         return {"shelters_allocated": shelters_to_allocate}
+
+
+class AggregateResourceAllocationTool(BaseTool):
+    def __init__(self):
+        super().__init__(name="allocate_resources")
+
+    def run(self, context: dict, env):
+        resource_availability = env.get_state("resource_availability") or {}
+        population_demands = env.get_state("population_demands") or {}
+        estimated_population = (
+            population_demands.get("estimated_affected_population")
+            or env.get_state("estimated_affected_population")
+            or 0
+        )
+        estimated_casualties = env.get_state("estimated_casualties") or 0
+        available_ambulances = resource_availability.get(
+            "available_ambulances",
+            env.get_state("available_ambulances") or 0,
+        )
+        available_shelters = resource_availability.get(
+            "available_shelters",
+            env.get_state("available_shelters") or 0,
+        )
+
+        shelter_need = max(0, int(estimated_population // 5000))
+        ambulance_need = max(1, int(estimated_casualties // 10)) if estimated_casualties else 0
+        medical_kit_need = max(0, int(estimated_casualties * 2))
+        water_need_liters = max(0, int(estimated_population * 3))
+        food_need_packs = max(0, int(estimated_population * 0.5))
+
+        allocation = {
+            "ambulances": min(available_ambulances, ambulance_need),
+            "shelters": min(available_shelters, shelter_need),
+            "medical_kits": min(medical_kit_need, 5000),
+            "water_liters": min(water_need_liters, 30000),
+            "food_packs": min(food_need_packs, 10000),
+            "basis": {
+                "estimated_population": estimated_population,
+                "estimated_casualties": estimated_casualties,
+                "demand_level": population_demands.get("demand_level", "unknown"),
+            },
+        }
+
+        env.update_state("resource_allocation_plan", allocation)
+        return {"resource_allocation_plan": allocation}
+
+
 class ReliefAllocationTool(BaseTool):
 
     def __init__(self):

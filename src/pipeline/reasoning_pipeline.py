@@ -2,6 +2,7 @@ import json
 
 from src.router.router_utils import load_router_components
 from src.router.router import route_query
+from src.router.node_mapper import map_tasks_to_nodes
 
 from src.planner.run_planner import predict_plan
 
@@ -41,13 +42,15 @@ class ReasoningPipeline:
 
         predicted_nodes = planner_result["predicted_nodes"]
         node_confidence_scores = planner_result["node_confidence_scores"]
+        task_mapped_nodes = map_tasks_to_nodes(predicted_tasks, confidence_scores)
+        combined_nodes = list(dict.fromkeys(predicted_nodes + task_mapped_nodes))
 
         # 3. Build SLR reasoning graph
         reasoning_graph = self.slr_builder.build(
             message=message,
             predicted_tasks=predicted_tasks,
             confidence_scores=confidence_scores,
-            predicted_nodes=predicted_nodes
+            predicted_nodes=combined_nodes
         )
 
         # 4. Executor
@@ -69,7 +72,9 @@ class ReasoningPipeline:
             "router_result": router_result,
             "planner_result": {
                 "predicted_tasks": predicted_tasks,
-                "predicted_nodes": predicted_nodes,
+                "predicted_nodes": combined_nodes,
+                "model_predicted_nodes": predicted_nodes,
+                "task_mapped_nodes": task_mapped_nodes,
                 "node_confidence_scores": node_confidence_scores,
             },
             "slr_result": {

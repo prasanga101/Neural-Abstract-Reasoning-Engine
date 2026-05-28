@@ -1,4 +1,5 @@
 from src.executor.base_tools import BaseTool
+from src.executor.geo_utils import geocode_location
 import requests
 
 KNOWN_LOCATIONS = {
@@ -57,6 +58,8 @@ class SensorCollectionTool(BaseTool):
                 "location": location,
                 "latitude": latitude,
                 "longitude": longitude,
+                "resolved_location": resolved_location.get("formatted"),
+                "geocode_source": resolved_location.get("source"),
                 "temperature": current.get("temperature"),
                 "windspeed": current.get("windspeed")
             }
